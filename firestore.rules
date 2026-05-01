@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function allowedUser() {
+      return signedIn()
+        && request.auth.uid in [
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        ];
+    }
+
+    match /couples/{coupleId}/monthversaries/{memoryId} {
+      allow read, create, update, delete: if allowedUser();
+    }
+  }
+}

@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function allowedUser() {
+      return signedIn()
+        && request.auth.uid in [
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        ];
+    }
+
+    match /couples/{coupleId}/monthversaries/{memoryId}/{fileName} {
+      allow read: if allowedUser();
+      allow write: if allowedUser()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches("image/.*");
+      allow delete: if allowedUser();
+    }
+  }
+}

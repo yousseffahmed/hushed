@@ -1,6 +1,11 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  type Firestore
+} from "firebase/firestore";
+import { getMessaging, isSupported } from "firebase/messaging";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -12,6 +17,9 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
+
+let firestoreDb: Firestore | null = null;
+let diagnosticsLogged = false;
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(
@@ -30,11 +38,77 @@ export function getFirebaseServices() {
   }
 
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const db = getConfiguredFirestore(app);
+
+  logFirebaseDiagnostics();
 
   return {
     app,
     auth: getAuth(app),
-    db: getFirestore(app),
+    db,
     storage: getStorage(app)
   };
+}
+
+export async function getFirebaseMessaging() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const supported = await isSupported();
+
+  if (!supported) {
+    return null;
+  }
+
+  const { app } = getFirebaseServices();
+  return getMessaging(app);
+}
+
+export function logFirebaseDiagnostics(): void {
+  if (process.env.NODE_ENV !== "development" || diagnosticsLogged) {
+    return;
+  }
+
+  diagnosticsLogged = true;
+
+  const envPresence = {
+    apiKey: Boolean(firebaseConfig.apiKey),
+    authDomain: Boolean(firebaseConfig.authDomain),
+    projectId: Boolean(firebaseConfig.projectId),
+    storageBucket: Boolean(firebaseConfig.storageBucket),
+    messagingSenderId: Boolean(firebaseConfig.messagingSenderId),
+    appId: Boolean(firebaseConfig.appId),
+    measurementId: Boolean(firebaseConfig.measurementId),
+    vapidKey: Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY)
+  };
+
+  console.info("[Firebase diagnostics]", {
+    projectId: firebaseConfig.projectId || "(missing)",
+    authDomain: firebaseConfig.authDomain || "(missing)",
+    envPresence,
+    online: typeof navigator !== "undefined" ? navigator.onLine : "server",
+    hostname: typeof window !== "undefined" ? window.location.hostname : "server",
+    https: typeof window !== "undefined" ? window.location.protocol === "https:" : "server",
+    localhost:
+      typeof window !== "undefined"
+        ? ["localhost", "127.0.0.1"].includes(window.location.hostname)
+        : "server"
+  });
+}
+
+function getConfiguredFirestore(app: ReturnType<typeof initializeApp>): Firestore {
+  if (firestoreDb) {
+    return firestoreDb;
+  }
+
+  try {
+    firestoreDb = initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true
+    });
+  } catch {
+    firestoreDb = getFirestore(app);
+  }
+
+  return firestoreDb;
 }

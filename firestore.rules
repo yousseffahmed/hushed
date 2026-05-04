@@ -14,8 +14,32 @@ service cloud.firestore {
         ];
     }
 
-    match /couples/{coupleId}/monthversaries/{memoryId} {
-      allow read, create, update, delete: if allowedUser();
+    match /couples/{coupleId} {
+      allow read: if allowedUser();
+
+      match /monthversaries/{memoryId} {
+        allow read, create, update, delete: if allowedUser();
+      }
+
+      match /nudges/{nudgeId} {
+        allow read: if allowedUser();
+        allow create: if allowedUser()
+          && request.resource.data.fromUserId == request.auth.uid
+          && request.resource.data.toUserId in [
+            "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+            "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+          ]
+          && request.resource.data.toUserId != request.auth.uid;
+        allow update: if allowedUser()
+          && resource.data.toUserId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt"]);
+        allow delete: if false;
+      }
+
+      match /notificationTokens/{userId}/tokens/{tokenId} {
+        allow read, create, update, delete: if allowedUser()
+          && request.auth.uid == userId;
+      }
     }
   }
 }

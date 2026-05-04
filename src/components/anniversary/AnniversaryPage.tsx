@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { useRouter } from "next/navigation";
 import { coupleConfig } from "@/lib/coupleConfig";
 import { AuthCard } from "@/components/auth/AuthCard";
 import {
@@ -29,16 +30,18 @@ import { MonthversaryDetail } from "./MonthversaryDetail";
 import { MonthversaryForm } from "./MonthversaryForm";
 import { NextAnniversaryCard } from "./NextAnniversaryCard";
 import { TimeTogetherCard } from "./TimeTogetherCard";
+import { NudgeCard } from "@/components/nudges/NudgeCard";
 
 const MEMORY_CARD_COUNT = 4;
 
 export function AnniversaryPage() {
+  const router = useRouter();
   const [memories, setMemories] = useState<MonthversaryMemory[]>([]);
+  const [displayedMemories, setDisplayedMemories] = useState<MonthversaryMemory[]>([]);
   const [isAddingMemory, setIsAddingMemory] = useState(false);
   const [detailMemory, setDetailMemory] = useState<MonthversaryMemory | null>(null);
   const [editingMemory, setEditingMemory] = useState<MonthversaryMemory | null>(null);
   const [featuredMemoryId, setFeaturedMemoryId] = useState<string | null>(null);
-  const [randomSeed] = useState(() => Math.random());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
@@ -52,10 +55,6 @@ export function AnniversaryPage() {
   const nextAnniversary = getNextMonthlyAnniversary(today, coupleConfig.anniversaryDay);
   const daysUntilNextAnniversary = getDaysUntil(nextAnniversary, today);
   const isAnniversaryToday = isSameLocalDay(nextAnniversary, today);
-  const displayedMemories = useMemo(
-    () => selectRandomMemories(memories, MEMORY_CARD_COUNT, randomSeed, featuredMemoryId),
-    [featuredMemoryId, memories, randomSeed]
-  );
   const canUseMemories = Boolean(currentUser);
 
   useEffect(() => {
@@ -72,6 +71,7 @@ export function AnniversaryPage() {
 
       if (!user) {
         setMemories([]);
+        setDisplayedMemories([]);
         setSyncStatus("");
         setErrorMessage("Sign in with one of the two allowed accounts to see synced memories.");
         unsubscribeMonthversaries?.();
@@ -105,6 +105,30 @@ export function AnniversaryPage() {
       unsubscribeMonthversaries?.();
     };
   }, []);
+
+  useEffect(() => {
+    setDisplayedMemories((currentDisplayed) => {
+      if (memories.length <= MEMORY_CARD_COUNT) {
+        return memories;
+      }
+
+      if (featuredMemoryId) {
+        return pickRandomMemories(memories, MEMORY_CARD_COUNT, featuredMemoryId);
+      }
+
+      const nextDisplayed = currentDisplayed
+        .map((displayedMemory) =>
+          memories.find((memory) => memory.id === displayedMemory.id)
+        )
+        .filter((memory): memory is MonthversaryMemory => Boolean(memory));
+
+      if (nextDisplayed.length === MEMORY_CARD_COUNT) {
+        return nextDisplayed;
+      }
+
+      return pickRandomMemories(memories, MEMORY_CARD_COUNT);
+    });
+  }, [featuredMemoryId, memories]);
 
   useEffect(() => {
     if (!detailMemory) {
@@ -176,6 +200,11 @@ export function AnniversaryPage() {
 
   function openDetailMemory(memory: MonthversaryMemory) {
     setDetailMemory(memory);
+  }
+
+  function shuffleDisplayedMemories() {
+    setFeaturedMemoryId(null);
+    setDisplayedMemories(pickRandomMemories(memories, MEMORY_CARD_COUNT));
   }
 
   function closeMemoryForm() {
@@ -281,8 +310,13 @@ export function AnniversaryPage() {
         />
       </div>
 
+      {currentUser ? (
+        <NudgeCard currentUser={currentUser} onError={setErrorMessage} />
+      ) : null}
+
       <section className="mt-7">
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
           <h2 className="font-[var(--font-display)] text-3xl text-rose-950">
             Our 19th Memories
           </h2>
@@ -294,6 +328,24 @@ export function AnniversaryPage() {
           >
             Add memory
           </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={shuffleDisplayedMemories}
+              disabled={memories.length === 0}
+              className="rounded-full bg-white/80 px-4 py-3 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              🔀 Shuffle
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/memories")}
+              className="rounded-full bg-white/80 px-4 py-3 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-100"
+            >
+              View All
+            </button>
+          </div>
         </div>
         {displayedMemories.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -343,34 +395,36 @@ export function AnniversaryPage() {
   );
 }
 
-function selectRandomMemories(
+export function pickRandomMemories(
   memories: MonthversaryMemory[],
   count: number,
-  seed: number,
-  featuredMemoryId: string | null
+  featuredMemoryId?: string | null
 ): MonthversaryMemory[] {
+  if (memories.length <= count) {
+    return memories;
+  }
+
   const featuredMemory = featuredMemoryId
     ? memories.find((memory) => memory.id === featuredMemoryId)
     : null;
   const pool = featuredMemory
     ? memories.filter((memory) => memory.id !== featuredMemory.id)
     : memories;
-  const shuffled = [...pool].sort((first, second) => {
-    return seededScore(first.id, seed) - seededScore(second.id, seed);
-  });
+  const shuffled = shuffleArray(pool);
   const selected = shuffled.slice(0, featuredMemory ? count - 1 : count);
 
   return featuredMemory ? [featuredMemory, ...selected] : selected;
 }
 
-function seededScore(value: string, seed: number): number {
-  let hash = Math.floor(seed * 1_000_000);
+export function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
 
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
   }
 
-  return hash;
+  return shuffled;
 }
 
 function getFriendlyError(error: unknown): string {

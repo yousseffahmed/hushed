@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { coupleConfig } from "@/lib/coupleConfig";
+import { getUserDisplayName } from "@/lib/coupleUsers";
 import {
   getDeniedNotificationMessage,
   getNotificationEnvironment,
@@ -128,7 +129,11 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
 
     listenForForegroundMessages((payload) => {
       const message = payload.notification?.body || payload.data?.message || "A little nudge arrived.";
-      setForegroundNudge(message);
+      const senderName =
+        payload.data?.fromName ||
+        getUserDisplayName(payload.data?.fromUid || payload.data?.fromUserId);
+
+      setForegroundNudge(`from ${senderName}: ${message}`);
       window.setTimeout(() => setForegroundNudge(""), 5000);
     })
       .then((nextUnsubscribe) => {
@@ -329,7 +334,9 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
             {recentNudges.map((nudge) => (
               <div key={nudge.id} className="rounded-2xl bg-rose-50/70 px-4 py-3">
                 <p className="text-sm font-semibold text-rose-950">
-                  {nudge.fromUserId === currentUser.uid ? "You sent" : "They sent"}: {nudge.message}
+                  {nudge.fromUserId === currentUser.uid
+                    ? "You sent"
+                    : `${getUserDisplayName(nudge.fromUserId)} sent`}: {nudge.message}
                 </p>
                 <p className="mt-1 text-xs font-medium text-stone-500">
                   {formatTimeAgo(nudge.createdAt)}

@@ -14,9 +14,10 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || "yushef";
+  const fromName = payload.data?.fromName || getUserDisplayName(payload.data?.fromUid || payload.data?.fromUserId);
+  const title = payload.notification?.title || `${fromName} ❤️`;
   const options = {
-    body: payload.notification?.body || "A little nudge arrived.",
+    body: payload.notification?.body || payload.data?.message || "A little nudge arrived.",
     icon: "/icons/icon-192.png",
     badge: "/apple-touch-icon.png",
     data: {
@@ -27,6 +28,15 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(title, options);
 });
+
+function getUserDisplayName(uid) {
+  const displayNames = {
+    xLUPD71OGYfG4NByDz0buh8ZIsy2: "Shosho",
+    orPQHip5ooOtfSSkyLYhl5hx9Kg1: "Yuyu"
+  };
+
+  return displayNames[uid] || "Someone";
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

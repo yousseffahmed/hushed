@@ -36,6 +36,24 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /suggestions/{suggestionId} {
+        allow read: if allowedUser();
+        allow create: if allowedUser()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdByName is string
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0;
+        allow update: if allowedUser()
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "likedBy",
+            "done",
+            "doneAt"
+          ]);
+        allow delete: if allowedUser()
+          && resource.data.createdBy == request.auth.uid;
+      }
+
       match /notificationTokens/{userId}/tokens/{tokenId} {
         allow read, create, update, delete: if allowedUser()
           && request.auth.uid == userId;

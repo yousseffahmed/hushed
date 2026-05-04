@@ -2,6 +2,7 @@ const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const { getUserDisplayName } = require("./coupleUsers");
 
 admin.initializeApp();
 setGlobalOptions({ maxInstances: 10 });
@@ -28,6 +29,7 @@ exports.sendNudgeNotification = onDocumentCreated(
       const fromUid = nudge.fromUid || nudge.fromUserId;
       const toUid = nudge.toUid || nudge.toUserId;
       const message = nudge.message || "You received a nudge ❤️";
+      const fromName = getUserDisplayName(fromUid);
       const clientCreatedAtMs =
         typeof nudge.clientCreatedAtMs === "number" ? nudge.clientCreatedAtMs : null;
       const firestoreCreatedAtMs =
@@ -101,13 +103,16 @@ exports.sendNudgeNotification = onDocumentCreated(
       const response = await admin.messaging().sendEachForMulticast({
         tokens,
         notification: {
-          title: "yushef ❤️",
+          title: `${fromName} ❤️`,
           body: String(message)
         },
         data: {
           type: "nudge",
           coupleId: String(coupleId),
-          nudgeId: String(nudgeId)
+          nudgeId: String(nudgeId),
+          fromUid: String(fromUid),
+          fromName: String(fromName),
+          message: String(message)
         }
       });
       const fcmSendDurationMs = Date.now() - fcmSendStartMs;
@@ -146,6 +151,8 @@ exports.sendNudgeNotification = onDocumentCreated(
       logger.info("Nudge notification sent.", {
         coupleId,
         nudgeId,
+        fromUid,
+        fromName,
         toUid,
         successCount: response.successCount,
         failureCount: response.failureCount,

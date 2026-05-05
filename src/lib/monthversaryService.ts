@@ -150,8 +150,11 @@ export async function deleteMonthversary(coupleId: string, memoryId: string): Pr
   const memory = snapshot.exists() ? mapMemoryDoc(snapshot.id, snapshot.data()) : null;
 
   if (memory) {
+    // Older records may only have download URLs; those files cannot be deleted without a storagePath.
+    const photosWithStoragePaths = memory.photos.filter((photo) => photo.storagePath);
+
     await Promise.allSettled(
-      memory.photos.map((photo) => deleteObject(ref(storage, photo.storagePath)))
+      photosWithStoragePaths.map((photo) => deleteObject(ref(storage, photo.storagePath)))
     );
   }
 

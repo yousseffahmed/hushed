@@ -1237,3 +1237,79 @@
 [info] ✔  Deploy complete! 
 [info] 
 [info] Project Console: https://console.firebase.google.com/project/yushef-b3534/overview
+[debug] [2026-05-05T17:42:04.121Z] ----------------------------------------------------------------------
+[debug] [2026-05-05T17:42:04.125Z] Command:       /opt/homebrew/Cellar/node/23.7.0/bin/node /opt/homebrew/bin/firebase deploy --only firestore:rules
+[debug] [2026-05-05T17:42:04.125Z] CLI Version:   15.16.0
+[debug] [2026-05-05T17:42:04.125Z] Platform:      darwin
+[debug] [2026-05-05T17:42:04.125Z] Node Version:  v23.7.0
+[debug] [2026-05-05T17:42:04.125Z] Time:          Tue May 05 2026 20:42:04 GMT+0300 (Eastern European Summer Time)
+[debug] [2026-05-05T17:42:04.125Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-05T17:42:04.126Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-05-05T17:42:04.955Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-05T17:42:04.956Z] > authorizing via signed-in user (yoyo.ah360@gmail.com)
+[debug] [2026-05-05T17:42:04.956Z] [iam] checking project yushef-b3534 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-05-05T17:42:04.956Z] Checked if tokens are valid: false, expires at: 1777939379817
+[debug] [2026-05-05T17:42:04.956Z] Checked if tokens are valid: false, expires at: 1777939379817
+[debug] [2026-05-05T17:42:04.956Z] > refreshing access token with scopes: []
+[debug] [2026-05-05T17:42:04.957Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-05T17:42:04.957Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-05T17:42:05.553Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-05T17:42:05.554Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-05T17:42:05.576Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/yushef-b3534:testIamPermissions [none]
+[debug] [2026-05-05T17:42:05.576Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/yushef-b3534:testIamPermissions  x-goog-user-project=yushef-b3534
+[debug] [2026-05-05T17:42:05.577Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/yushef-b3534:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-05T17:42:05.581Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-05-05T17:42:05.582Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-05-05T17:42:07.125Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/yushef-b3534:testIamPermissions 200
+[debug] [2026-05-05T17:42:07.126Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/yushef-b3534:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'yushef-b3534'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-05T17:42:07.133Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:07.133Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:07.133Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/yushef-b3534/databases/(default) [none]
+[debug] [2026-05-05T17:42:07.504Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/yushef-b3534/databases/(default) 200
+[debug] [2026-05-05T17:42:07.504Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/yushef-b3534/databases/(default) {"name":"projects/yushef-b3534/databases/(default)","uid":"19a91c2f-2403-4784-b82d-61b26ea00072","createTime":"2026-05-01T13:31:33.820771Z","updateTime":"2026-05-01T13:31:33.820771Z","locationId":"eur3","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-05T16:42:07.489421Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"e","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IPGcnIfZopQDMIfOmrmdmJQD"}
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-05-05T17:42:07.506Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:07.506Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:07.507Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534:test [none]
+[debug] [2026-05-05T17:42:07.507Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534:test [omitted]
+[debug] [2026-05-05T17:42:08.697Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534:test 200
+[debug] [2026-05-05T17:42:08.697Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-05-05T17:42:08.699Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:08.700Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:08.700Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases pageSize=10&pageToken=
+[debug] [2026-05-05T17:42:09.555Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases 200
+[debug] [2026-05-05T17:42:09.555Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases {"releases":[{"name":"projects/yushef-b3534/releases/cloud.firestore","rulesetName":"projects/yushef-b3534/rulesets/a44a882d-ae43-485f-98e6-6c6c7fb90c4e","createTime":"2026-05-01T13:31:36.583456Z","updateTime":"2026-05-04T23:18:56.962082Z"},{"name":"projects/yushef-b3534/releases/firebase.storage/yushef-b3534.firebasestorage.app","rulesetName":"projects/yushef-b3534/rulesets/f32a1ccd-4e0d-43e4-8658-9bb278805982","createTime":"2026-05-01T13:41:06.888022Z","updateTime":"2026-05-01T13:42:54.743880Z"}]}
+[debug] [2026-05-05T17:42:09.586Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:09.586Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:09.586Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets/a44a882d-ae43-485f-98e6-6c6c7fb90c4e [none]
+[debug] [2026-05-05T17:42:09.953Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets/a44a882d-ae43-485f-98e6-6c6c7fb90c4e 200
+[debug] [2026-05-05T17:42:09.953Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets/a44a882d-ae43-485f-98e6-6c6c7fb90c4e [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-05-05T17:42:09.954Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:09.954Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:09.955Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets [none]
+[debug] [2026-05-05T17:42:09.955Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets [omitted]
+[debug] [2026-05-05T17:42:10.904Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets 200
+[debug] [2026-05-05T17:42:10.905Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/yushef-b3534/rulesets {"name":"projects/yushef-b3534/rulesets/68c3ff6a-a648-43dd-a684-cc59089b2d25","source":{"files":[{"content":"rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function signedIn() {\n      return request.auth != null;\n    }\n\n    function allowedUser() {\n      return signedIn()\n        && request.auth.uid in [\n          \"xLUPD71OGYfG4NByDz0buh8ZIsy2\",\n          \"orPQHip5ooOtfSSkyLYhl5hx9Kg1\"\n        ];\n    }\n\n    match /couples/{coupleId} {\n      allow read: if allowedUser();\n\n      match /monthversaries/{memoryId} {\n        allow read, create, update, delete: if allowedUser();\n      }\n\n      match /nudges/{nudgeId} {\n        allow read: if allowedUser();\n        allow create: if allowedUser()\n          && request.resource.data.fromUserId == request.auth.uid\n          && request.resource.data.toUserId in [\n            \"xLUPD71OGYfG4NByDz0buh8ZIsy2\",\n            \"orPQHip5ooOtfSSkyLYhl5hx9Kg1\"\n          ]\n          && request.resource.data.toUserId != request.auth.uid;\n        allow update: if allowedUser()\n          && resource.data.toUserId == request.auth.uid\n          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\"readAt\"]);\n        allow delete: if false;\n      }\n\n      match /suggestions/{suggestionId} {\n        allow read: if allowedUser();\n        allow create: if allowedUser()\n          && request.resource.data.createdBy == request.auth.uid\n          && request.resource.data.createdByName is string\n          && request.resource.data.message is string\n          && request.resource.data.message.size() > 0;\n        allow update: if allowedUser()\n          && request.resource.data.createdBy == resource.data.createdBy\n          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([\n            \"likedBy\",\n            \"done\",\n            \"doneAt\"\n          ]);\n        allow delete: if allowedUser()\n          && resource.data.createdBy == request.auth.uid;\n      }\n\n      match /theaterItems/{itemId} {\n        allow read: if allowedUser();\n        allow create: if allowedUser()\n          && request.resource.data.addedByUid == request.auth.uid\n          && request.resource.data.title is string\n          && request.resource.data.title.size() > 0;\n        allow update, delete: if allowedUser();\n\n        match /comments/{commentId} {\n          allow read: if allowedUser();\n          allow create: if allowedUser()\n            && request.resource.data.uid == request.auth.uid\n            && request.resource.data.text is string\n            && request.resource.data.text.size() > 0;\n          allow update: if allowedUser()\n            && resource.data.uid == request.auth.uid\n            && request.resource.data.uid == resource.data.uid;\n          allow delete: if allowedUser()\n            && resource.data.uid == request.auth.uid;\n        }\n      }\n\n      match /theaterSession/{sessionId} {\n        allow read, create, update, delete: if allowedUser();\n      }\n\n      match /notificationTokens/{userId}/tokens/{tokenId} {\n        allow read, create, update, delete: if allowedUser()\n          && request.auth.uid == userId;\n      }\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-05-05T17:42:10.815231Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-05-05T17:42:10.905Z] [rules] created ruleset projects/yushef-b3534/rulesets/68c3ff6a-a648-43dd-a684-cc59089b2d25
+[debug] [2026-05-05T17:42:10.906Z] [rules] releasing cloud.firestore with ruleset projects/yushef-b3534/rulesets/68c3ff6a-a648-43dd-a684-cc59089b2d25
+[debug] [2026-05-05T17:42:10.906Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:10.907Z] Checked if tokens are valid: true, expires at: 1778006524554
+[debug] [2026-05-05T17:42:10.907Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases/cloud.firestore [none]
+[debug] [2026-05-05T17:42:10.907Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases/cloud.firestore {"release":{"name":"projects/yushef-b3534/releases/cloud.firestore","rulesetName":"projects/yushef-b3534/rulesets/68c3ff6a-a648-43dd-a684-cc59089b2d25"}}
+[debug] [2026-05-05T17:42:11.377Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases/cloud.firestore 200
+[debug] [2026-05-05T17:42:11.378Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/yushef-b3534/releases/cloud.firestore {"name":"projects/yushef-b3534/releases/cloud.firestore","rulesetName":"projects/yushef-b3534/rulesets/68c3ff6a-a648-43dd-a684-cc59089b2d25","createTime":"2026-05-01T13:31:36.583456Z","updateTime":"2026-05-05T17:42:11.284806Z"}
+[debug] [2026-05-05T17:42:11.378Z] [rules] updated release projects/yushef-b3534/releases/cloud.firestore
+[info] ✔  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] ✔  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/yushef-b3534/overview

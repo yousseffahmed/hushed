@@ -340,6 +340,30 @@ export function AnniversaryPage() {
         </button>
       </section>
 
+      <section className="mt-5 overflow-hidden rounded-[2rem] bg-rose-950 px-5 py-5 text-rose-50 shadow-[0_18px_42px_rgba(67,42,45,0.2)]">
+        <div className="-mx-5 -mt-5 mb-4 grid grid-cols-8 gap-1 bg-rose-900/70 px-5 py-3">
+          {Array.from({ length: 16 }).map((_, index) => (
+            <span key={index} className="h-3 rounded-sm bg-rose-100/22" />
+          ))}
+        </div>
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-200">
+          Yushef Theater
+        </p>
+        <h2 className="mt-1 font-[var(--font-display)] text-3xl leading-tight">
+          Start movie night together
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-rose-100">
+          Shared watchlist, tiny reviews, and a synced countdown for pressing play.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push("/theater")}
+          className="mt-5 w-full rounded-2xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-950 shadow-lg shadow-rose-950/20"
+        >
+          Open Yushef Theater
+        </button>
+      </section>
+
       <section className="mt-7">
         <div className="mb-4 space-y-3">
           <div className="flex items-center justify-between gap-4">

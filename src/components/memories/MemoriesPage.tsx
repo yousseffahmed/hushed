@@ -4,11 +4,16 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
+import { MonthversaryForm } from "@/components/anniversary/MonthversaryForm";
 import { coupleConfig } from "@/lib/coupleConfig";
 import { formatMonthDayYear, parseLocalDate } from "@/lib/dateUtils";
 import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase";
 import {
+  deleteMonthversary,
   subscribeToMonthversaries,
+  updateMonthversary,
+  uploadMemoryPhotos,
+  type MonthversaryMemoryInput,
   type MonthversaryMemory
 } from "@/lib/monthversaryService";
 
@@ -18,6 +23,12 @@ export function MemoriesPage() {
   const [memories, setMemories] = useState<MonthversaryMemory[]>([]);
   const [syncStatus, setSyncStatus] = useState("Connecting memories...");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [editingMemory, setEditingMemory] = useState<MonthversaryMemory | null>(null);
+  const [memoryToDelete, setMemoryToDelete] = useState<MonthversaryMemory | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -35,6 +46,9 @@ export function MemoriesPage() {
         setMemories([]);
         setSyncStatus("");
         setErrorMessage("Sign in with one of the two allowed accounts to see synced memories.");
+        setSuccessMessage("");
+        setEditingMemory(null);
+        setMemoryToDelete(null);
         unsubscribeMonthversaries?.();
         return;
       }
@@ -60,6 +74,60 @@ export function MemoriesPage() {
       unsubscribeMonthversaries?.();
     };
   }, []);
+
+  async function handleSaveMemory(input: MonthversaryMemoryInput, files: File[]) {
+    if (!currentUser || !editingMemory) {
+      setErrorMessage("Sign in before editing a memory.");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setUploadStatus("");
+
+    try {
+      await updateMonthversary(coupleConfig.coupleId, editingMemory.id, input);
+
+      if (files.length > 0) {
+        await uploadMemoryPhotos(
+          coupleConfig.coupleId,
+          editingMemory.id,
+          files,
+          currentUser.uid,
+          ({ fileName, percent }) => setUploadStatus(`Uploading ${fileName}: ${percent}%`)
+        );
+      }
+
+      setEditingMemory(null);
+      setUploadStatus("");
+      setSuccessMessage("Memory updated.");
+    } catch (error) {
+      setErrorMessage(getFriendlyError(error));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!memoryToDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await deleteMonthversary(coupleConfig.coupleId, memoryToDelete.id);
+      setMemoryToDelete(null);
+      setSuccessMessage("Memory deleted.");
+    } catch (error) {
+      setErrorMessage(getFriendlyError(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   if (!currentUser) {
     return (
@@ -116,12 +184,22 @@ export function MemoriesPage() {
             {errorMessage}
           </p>
         ) : null}
+        {successMessage ? (
+          <p className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-sm font-medium leading-6 text-rose-700 ring-1 ring-rose-100">
+            {successMessage}
+          </p>
+        ) : null}
       </header>
 
       {memories.length > 0 ? (
         <section className="space-y-4">
           {memories.map((memory) => (
-            <FullMemoryCard key={memory.id} memory={memory} />
+            <FullMemoryCard
+              key={memory.id}
+              memory={memory}
+              onDelete={setMemoryToDelete}
+              onEdit={setEditingMemory}
+            />
           ))}
         </section>
       ) : (
@@ -129,11 +207,47 @@ export function MemoriesPage() {
           No memories yet — start your story.
         </section>
       )}
+
+      {editingMemory ? (
+        <MonthversaryForm
+          initialMemory={editingMemory}
+          isSaving={isSaving}
+          uploadStatus={uploadStatus}
+          onCancel={() => {
+            if (!isSaving) {
+              setEditingMemory(null);
+              setUploadStatus("");
+            }
+          }}
+          onSave={handleSaveMemory}
+        />
+      ) : null}
+
+      {memoryToDelete ? (
+        <DeleteMemoryDialog
+          isDeleting={isDeleting}
+          memory={memoryToDelete}
+          onCancel={() => {
+            if (!isDeleting) {
+              setMemoryToDelete(null);
+            }
+          }}
+          onConfirm={handleConfirmDelete}
+        />
+      ) : null}
     </main>
   );
 }
 
-function FullMemoryCard({ memory }: { memory: MonthversaryMemory }) {
+function FullMemoryCard({
+  memory,
+  onDelete,
+  onEdit
+}: {
+  memory: MonthversaryMemory;
+  onDelete: (memory: MonthversaryMemory) => void;
+  onEdit: (memory: MonthversaryMemory) => void;
+}) {
   const date = parseLocalDate(memory.date);
   const coverPhoto = memory.photos[0];
   const extraPhotoCount = Math.max(0, memory.photos.length - 1);
@@ -176,8 +290,72 @@ function FullMemoryCard({ memory }: { memory: MonthversaryMemory }) {
         <p className="mt-4 text-xs font-medium text-rose-400">
           {memory.photos.length} photo{memory.photos.length === 1 ? "" : "s"}
         </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            aria-label={`Edit ${memory.title}`}
+            onClick={() => onEdit(memory)}
+            className="rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/15"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${memory.title}`}
+            onClick={() => onDelete(memory)}
+            className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 ring-1 ring-red-100"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </article>
+  );
+}
+
+function DeleteMemoryDialog({
+  isDeleting,
+  memory,
+  onCancel,
+  onConfirm
+}: {
+  isDeleting: boolean;
+  memory: MonthversaryMemory;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-30 flex items-end bg-rose-950/28 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:items-center sm:justify-center">
+      <section className="w-full max-w-md rounded-[2rem] bg-white px-5 py-6 shadow-[0_28px_80px_rgba(67,42,45,0.28)] ring-1 ring-rose-100">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
+          Delete memory
+        </p>
+        <h2 className="mt-2 font-[var(--font-display)] text-3xl text-rose-950">
+          Delete this memory?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">
+          This will remove “{memory.title}” and its photos. This cannot be undone.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={onCancel}
+            className="flex-1 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={onConfirm}
+            className="flex-1 rounded-2xl bg-red-700 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-red-700/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isDeleting ? "Deleting..." : "Delete Memory"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

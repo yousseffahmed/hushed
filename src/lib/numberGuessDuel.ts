@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
   type Timestamp,
   type Unsubscribe
 } from "firebase/firestore";
@@ -20,7 +21,8 @@ export type NumberGuessRoundStatus =
   | "waiting_for_players"
   | "setting_secrets"
   | "in_progress"
-  | "finished";
+  | "finished"
+  | "ended";
 
 export type NumberGuessPlayer = {
   name: string;
@@ -285,6 +287,48 @@ export async function submitNumberGuess(
   return result.data;
 }
 
+export async function resetNumberGuessScores(coupleId: string): Promise<void> {
+  const { db } = getFirebaseServices();
+  const batch = writeBatch(db);
+  const scoresRef = collection(db, "couples", coupleId, "games", "numberGuessDuel", "scores");
+
+  coupleUsers.allowedUserIds.forEach((uid) => {
+    console.info(
+      `[Number Guess Duel] Resetting score path: couples/${coupleId}/games/numberGuessDuel/scores/${uid}`
+    );
+    batch.set(
+      doc(scoresRef, uid),
+      {
+        uid,
+        name: getUserDisplayName(uid),
+        wins: 0,
+        losses: 0,
+        roundsPlayed: 0,
+        totalGuesses: 0,
+        bestWinAttempts: null,
+        updatedAt: serverTimestamp()
+      }
+    );
+  });
+
+  await batch.commit();
+}
+
+export async function endNumberGuessRound(coupleId: string, roundId: string): Promise<void> {
+  const { db } = getFirebaseServices();
+  const roundRef = getRoundRef(db, coupleId, roundId);
+
+  console.info(
+    `[Number Guess Duel] Ending round path: couples/${coupleId}/games/numberGuessDuel/rounds/${roundId}`
+  );
+
+  await updateDoc(roundRef, {
+    status: "ended",
+    currentTurnUid: "",
+    updatedAt: serverTimestamp()
+  });
+}
+
 function getRoundRef(db: ReturnType<typeof getFirebaseServices>["db"], coupleId: string, roundId: string) {
   return doc(db, "couples", coupleId, "games", "numberGuessDuel", "rounds", roundId);
 }
@@ -374,7 +418,8 @@ function isRoundStatus(value: unknown): value is NumberGuessRoundStatus {
     value === "waiting_for_players" ||
     value === "setting_secrets" ||
     value === "in_progress" ||
-    value === "finished"
+    value === "finished" ||
+    value === "ended"
   );
 }
 

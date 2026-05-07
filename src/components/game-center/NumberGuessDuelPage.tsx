@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -10,8 +10,10 @@ import { coupleUsers, getUserDisplayName } from "@/lib/coupleUsers";
 import { getFirebaseServices, isFirebaseConfigured } from "@/lib/firebase";
 import {
   createNumberGuessRound,
+  endNumberGuessRound,
   isFourDigitNumber,
   joinNumberGuessRound,
+  resetNumberGuessScores,
   setNumberGuessSecret,
   submitNumberGuess,
   subscribeToActiveNumberGuessRound,
@@ -33,7 +35,11 @@ export function NumberGuessDuelPage() {
   const [ownSecret, setOwnSecret] = useState<NumberGuessSecret | null>(null);
   const [secretInput, setSecretInput] = useState("");
   const [isGuessOpen, setIsGuessOpen] = useState(false);
+  const [isEndGameOpen, setIsEndGameOpen] = useState(false);
+  const [isResetScoreOpen, setIsResetScoreOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isEndingGame, setIsEndingGame] = useState(false);
+  const [isResettingScore, setIsResettingScore] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading the duel...");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -216,13 +222,49 @@ export function NumberGuessDuelPage() {
       setIsGuessOpen(false);
       setSuccessMessage(
         result.isWinningGuess
-          ? `${formatRightCount(result.rightCount)} — cracked it!`
+          ? formatRightCount(result.rightCount)
           : formatRightCount(result.rightCount)
       );
     } catch (error) {
       setErrorMessage(getFriendlyError(error));
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  async function handleResetScore() {
+    setIsResettingScore(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await resetNumberGuessScores(coupleConfig.coupleId);
+      setIsResetScoreOpen(false);
+      setSuccessMessage("Scoreboard reset to 0-0.");
+    } catch (error) {
+      setErrorMessage(getScoreResetError(error));
+    } finally {
+      setIsResettingScore(false);
+    }
+  }
+
+  async function handleEndGame() {
+    if (!round || round.status !== "in_progress") {
+      return;
+    }
+
+    setIsEndingGame(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await endNumberGuessRound(coupleConfig.coupleId, round.id);
+      setIsEndGameOpen(false);
+      setSuccessMessage("Round ended. No score was awarded.");
+    } catch (error) {
+      setErrorMessage(getEndGameError(error));
+    } finally {
+      setIsEndingGame(false);
     }
   }
 
@@ -269,21 +311,14 @@ export function NumberGuessDuelPage() {
         </p>
       </header>
 
-      <section className="rounded-[2rem] bg-rose-950 px-5 py-6 text-rose-50 shadow-[0_22px_52px_rgba(67,42,45,0.24)]">
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-rose-50/14 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 ring-1 ring-rose-100/20">
-            2-player duel
-          </span>
-          <span className="rounded-full bg-rose-50/14 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-100 ring-1 ring-rose-100/20">
-            No hints
-          </span>
-        </div>
-        <h1 className="mt-2 font-[var(--font-display)] text-5xl leading-[0.95]">
+      <section className="rounded-[1.75rem] bg-rose-950 px-4 py-4 text-rose-50 shadow-[0_18px_40px_rgba(67,42,45,0.22)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-200">
+          2-player duel · exact positions only
+        </p>
+        <h1 className="mt-1 font-[var(--font-display)] text-4xl leading-none">
           Number Guess Duel
         </h1>
-        <p className="mt-4 text-sm leading-6 text-rose-100">
-          Crack the secret 4-digit code before your love does.
-        </p>
+        <p className="mt-2 text-sm leading-6 text-rose-100">Crack the code.</p>
       </section>
 
       {errorMessage ? (
@@ -298,53 +333,29 @@ export function NumberGuessDuelPage() {
       ) : null}
       {syncStatus ? <p className="mt-3 text-sm font-medium text-rose-500">{syncStatus}</p> : null}
 
-      <Scoreboard scores={scores} />
-      <HowToPlayCard />
+      <Scoreboard
+        isResetting={isResettingScore}
+        scores={scores}
+        onResetClick={() => setIsResetScoreOpen(true)}
+      />
 
-      <section className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
-              Game arena
-            </p>
-            <h2 className="mt-1 font-[var(--font-display)] text-3xl text-rose-950">
-              {round ? roundMessage : "No duel yet"}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={handleCreateRound}
-            disabled={isBusy}
-            className="rounded-full bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/15 disabled:opacity-60"
-          >
-            Rematch
-          </button>
+      <section className="mt-4 rounded-[1.75rem] bg-white/86 px-4 py-4 shadow-[0_16px_36px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-400">
+            Game arena
+          </p>
+          {round ? (
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-100">
+              {formatStatus(round.status)}
+            </span>
+          ) : null}
         </div>
-
-        {!round ? (
-          <button
-            type="button"
-            onClick={handleCreateRound}
-            disabled={isBusy}
-            className="mt-5 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20 disabled:opacity-60"
-          >
-            Create a duel
-          </button>
-        ) : null}
-
-        {round && !currentPlayer ? (
-          <button
-            type="button"
-            onClick={handleJoinRound}
-            disabled={isBusy}
-            className="mt-5 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20 disabled:opacity-60"
-          >
-            Join this duel
-          </button>
-        ) : null}
+        <h2 className="mt-2 font-[var(--font-display)] text-4xl leading-none text-rose-950">
+          {round ? roundMessage : "Ready?"}
+        </h2>
 
         {round ? (
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-2">
             {coupleUsers.allowedUserIds.map((uid) => {
               const player = round.players[uid];
               const score = scoreMap[uid];
@@ -362,80 +373,57 @@ export function NumberGuessDuelPage() {
             })}
           </div>
         ) : null}
-      </section>
 
-      {round?.status === "finished" ? (
-        <WinnerPanel
-          attempts={winnerGuess?.attemptNumber ?? round.players[round.winnerUid]?.attempts ?? 0}
-          winnerName={round.winnerName || getUserDisplayName(round.winnerUid)}
-          onRematch={handleCreateRound}
+        {round?.status === "finished" ? (
+          <WinnerPanel
+            attempts={winnerGuess?.attemptNumber ?? round.players[round.winnerUid]?.attempts ?? 0}
+            winnerName={round.winnerName || getUserDisplayName(round.winnerUid)}
+            onRematch={handleCreateRound}
+          />
+        ) : null}
+
+        {round && currentPlayer && !ownSecret ? (
+          <div className="mt-4 rounded-2xl bg-rose-50/70 px-3 py-3 ring-1 ring-rose-100">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400">
+              Your secret
+            </p>
+            <DigitInput label="Secret number" value={secretInput} onChange={setSecretInput} />
+          </div>
+        ) : null}
+
+        {round && currentPlayer && ownSecret ? (
+          <p className="mt-4 rounded-2xl bg-rose-50/70 px-4 py-3 text-sm font-semibold text-rose-950 ring-1 ring-rose-100">
+            Secret locked 🔒
+          </p>
+        ) : null}
+
+        <GameActionButton
+          bothReady={bothReady}
+          canGuess={canGuess}
+          currentUserId={currentUser.uid}
+          isBusy={isBusy}
+          isMyTurn={isMyTurn}
+          opponentUid={opponentUid}
+          ownSecret={ownSecret}
+          round={round}
+          onCreateRound={handleCreateRound}
+          onJoinRound={handleJoinRound}
+          onLockSecret={handleSaveSecret}
+          onOpenGuess={() => setIsGuessOpen(true)}
         />
-      ) : null}
-
-      {round && currentPlayer ? (
-        <section className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
-            Your secret
-          </p>
-          {ownSecret ? (
-            <div className="mt-4 rounded-2xl bg-rose-50/70 px-4 py-4 ring-1 ring-rose-100">
-              <p className="text-lg font-bold text-rose-950">Secret locked 🔒</p>
-              <p className="mt-1 text-sm font-medium text-stone-600">Your secret: ••••</p>
-            </div>
-          ) : (
-            <>
-              <DigitInput
-                label="Secret number"
-                value={secretInput}
-                onChange={setSecretInput}
-              />
-              <button
-                type="button"
-                onClick={handleSaveSecret}
-                disabled={isBusy || !isFourDigitNumber(secretInput) || round.status === "finished"}
-                className="mt-4 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Lock My Secret
-              </button>
-            </>
-          )}
-          <p className="mt-3 text-xs font-medium leading-5 text-stone-500">
-            Once the duel starts, secrets stay locked. Guesses are checked by a Cloud Function.
-          </p>
-        </section>
-      ) : null}
-
-      {round && currentPlayer ? (
-        <section className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
-            Your turn
-          </p>
-          <h2 className="mt-1 font-[var(--font-display)] text-3xl text-rose-950">
-            {roundMessage}
-          </h2>
+        {round?.status === "in_progress" ? (
           <button
             type="button"
-            onClick={() => setIsGuessOpen(true)}
-            disabled={isBusy || !canGuess}
-            className="mt-4 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setIsEndGameOpen(true)}
+            disabled={isEndingGame}
+            className="mt-3 w-full rounded-2xl bg-white/72 px-4 py-2.5 text-sm font-semibold text-rose-700 ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {round.status === "finished"
-              ? "Round finished"
-              : !bothReady
-                ? `Waiting for ${getWaitingSecretName(round, currentUser.uid)}`
-                : isMyTurn
-                  ? `Guess ${getUserDisplayName(opponentUid)}’s Number`
-                  : `Waiting for ${getUserDisplayName(round.currentTurnUid)}`}
+            End Game
           </button>
-          {!bothReady ? (
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              Both players need to lock a secret before guessing starts.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+        ) : null}
+      </section>
 
-      <GuessHistory guesses={guesses} />
+      <GuessHistory currentUserId={currentUser.uid} guesses={guesses} />
 
       {isGuessOpen && round ? (
         <GuessModal
@@ -449,6 +437,30 @@ export function NumberGuessDuelPage() {
           onSubmit={handleSubmitGuess}
         />
       ) : null}
+
+      {isResetScoreOpen ? (
+        <ResetScoreModal
+          isBusy={isResettingScore}
+          onCancel={() => {
+            if (!isResettingScore) {
+              setIsResetScoreOpen(false);
+            }
+          }}
+          onConfirm={handleResetScore}
+        />
+      ) : null}
+
+      {isEndGameOpen ? (
+        <EndGameModal
+          isBusy={isEndingGame}
+          onCancel={() => {
+            if (!isEndingGame) {
+              setIsEndGameOpen(false);
+            }
+          }}
+          onConfirm={handleEndGame}
+        />
+      ) : null}
     </main>
   );
 }
@@ -456,105 +468,251 @@ export function NumberGuessDuelPage() {
 function DigitInput({
   label,
   value,
-  onChange
+  onChange,
+  autoFocus = false
 }: {
+  autoFocus?: boolean;
   label: string;
   value: string;
   onChange: (value: string) => void;
 }) {
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const digits = value.padEnd(4, " ").slice(0, 4).split("");
 
+  useEffect(() => {
+    if (autoFocus) {
+      window.setTimeout(() => inputRefs.current[0]?.focus(), 80);
+    }
+  }, [autoFocus]);
+
+  function setDigit(index: number, nextValue: string) {
+    const numeric = nextValue.replace(/\D/g, "");
+
+    if (numeric.length > 1) {
+      const pastedDigits = numeric.slice(0, 4).split("");
+      onChange(pastedDigits.join(""));
+      inputRefs.current[Math.min(3, pastedDigits.length - 1)]?.focus();
+      return;
+    }
+
+    const nextDigits = [...digits];
+    nextDigits[index] = numeric || " ";
+    onChange(nextDigits.join("").replace(/\s/g, ""));
+
+    if (numeric && index < 3) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }
+
   return (
-    <label className="mt-4 block">
-      <span className="sr-only">{label}</span>
-      <input
-        className="sr-only"
-        inputMode="numeric"
-        maxLength={4}
-        value={value}
-        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
-      />
-      <div className="grid grid-cols-4 gap-2" aria-hidden="true">
+    <fieldset className="mt-3">
+      <legend className="sr-only">{label}</legend>
+      <div className="grid grid-cols-4 gap-2">
         {digits.map((digit, index) => (
-          <span
+          <input
             key={index}
-            className="flex aspect-square items-center justify-center rounded-2xl bg-rose-50 text-3xl font-black text-rose-950 ring-1 ring-rose-100"
-          >
-            {digit.trim() || "•"}
-          </span>
+            ref={(node) => {
+              inputRefs.current[index] = node;
+            }}
+            aria-label={`${label} digit ${index + 1}`}
+            className="aspect-square w-full rounded-2xl bg-rose-50 text-center text-3xl font-black text-rose-950 outline-none ring-1 ring-rose-100 transition focus:ring-2 focus:ring-rose-300"
+            inputMode="numeric"
+            maxLength={1}
+            pattern="[0-9]*"
+            type="text"
+            value={digit.trim()}
+            onChange={(event) => setDigit(index, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Backspace" && !digits[index].trim() && index > 0) {
+                inputRefs.current[index - 1]?.focus();
+              }
+            }}
+            onPaste={(event) => {
+              event.preventDefault();
+              setDigit(index, event.clipboardData.getData("text"));
+            }}
+          />
         ))}
       </div>
-    </label>
+    </fieldset>
   );
 }
 
-function Scoreboard({ scores }: { scores: NumberGuessScore[] }) {
+function Scoreboard({ isResetting, scores, onResetClick }: {
+  isResetting: boolean;
+  scores: NumberGuessScore[];
+  onResetClick: () => void;
+}) {
   const scoreMap = makeScoreMap(scores);
-  const shoshoScore = scoreMap[coupleUsers.allowedUserIds[0]];
-  const yuyuScore = scoreMap[coupleUsers.allowedUserIds[1]];
+  const shoshoUid = coupleUsers.allowedUserIds[0];
+  const yuyuUid = coupleUsers.allowedUserIds[1];
+  const shoshoScore = scoreMap[shoshoUid];
+  const yuyuScore = scoreMap[yuyuUid];
   const shoshoWins = shoshoScore?.wins ?? 0;
   const yuyuWins = yuyuScore?.wins ?? 0;
   const roundsPlayed = Math.max(shoshoScore?.roundsPlayed ?? 0, yuyuScore?.roundsPlayed ?? 0);
   const champion =
-    shoshoWins === yuyuWins
-      ? "Tied"
-      : shoshoWins > yuyuWins
-        ? getUserDisplayName(coupleUsers.allowedUserIds[0])
-        : getUserDisplayName(coupleUsers.allowedUserIds[1]);
+    shoshoWins === 0 && yuyuWins === 0
+      ? "No champion yet"
+      : shoshoWins === yuyuWins
+        ? "Tied"
+        : shoshoWins > yuyuWins
+          ? getUserDisplayName(shoshoUid)
+          : getUserDisplayName(yuyuUid);
+  const fastestWin = [shoshoScore, yuyuScore]
+    .filter((score): score is NumberGuessScore => Boolean(score?.bestWinAttempts))
+    .sort((a, b) => (a.bestWinAttempts ?? Infinity) - (b.bestWinAttempts ?? Infinity))[0];
 
   return (
-    <section className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-      <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
-        Scoreboard
-      </p>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        {coupleUsers.allowedUserIds.map((uid) => {
-          const score = scoreMap[uid];
-          return (
-            <div key={uid} className="rounded-2xl bg-rose-50/70 px-4 py-4 ring-1 ring-rose-100">
-              <p className="text-sm font-semibold text-rose-950">{getUserDisplayName(uid)}</p>
-              <p className="mt-2 text-3xl font-black text-rose-950">{score?.wins ?? 0}</p>
-              <p className="mt-1 text-xs font-medium text-stone-500">
-                wins
-              </p>
-              <p className="mt-2 text-xs font-medium text-stone-500">
-                {score?.bestWinAttempts
-                  ? `Fastest win: ${score.bestWinAttempts} guesses`
-                  : "No wins yet"}
-              </p>
-            </div>
-          );
-        })}
+    <section className="mt-4 overflow-hidden rounded-[1.5rem] bg-white/88 px-4 py-3 shadow-[0_12px_28px_rgba(176,92,112,0.12)] ring-1 ring-rose-100/90">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-400">
+            Scoreboard
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onResetClick}
+          disabled={isResetting}
+          className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-bold text-rose-600 ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Reset Score
+        </button>
       </div>
-      <div className="mt-4 rounded-2xl bg-white/70 px-4 py-4 text-sm leading-6 text-stone-600 ring-1 ring-rose-100">
-        <p>
-          <span className="font-semibold text-rose-950">Rounds played:</span> {roundsPlayed}
-        </p>
-        <p>
-          <span className="font-semibold text-rose-950">Current champion:</span> {champion}
-        </p>
+      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl bg-rose-50/75 px-3 py-3 ring-1 ring-rose-100">
+        <PlayerScore name="Yuyu" score={yuyuWins} align="left" />
+        <span className="rounded-full bg-rose-950 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.16em] text-rose-50 shadow-sm shadow-rose-950/20">
+          VS
+        </span>
+        <PlayerScore name="Shosho" score={shoshoWins} align="right" />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <ScoreChip label="Champion" value={champion} />
+        <ScoreChip label="Rounds" value={String(roundsPlayed)} />
+        <ScoreChip
+          label="Fastest"
+          value={
+            fastestWin?.bestWinAttempts
+              ? `${fastestWin.name || getUserDisplayName(fastestWin.uid)} in ${fastestWin.bestWinAttempts}`
+              : "None"
+          }
+        />
       </div>
     </section>
   );
 }
 
-function HowToPlayCard() {
+function PlayerScore({
+  align,
+  name,
+  score
+}: {
+  align: "left" | "right";
+  name: string;
+  score: number;
+}) {
   return (
-    <details className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-      <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.2em] text-rose-500">
-        How to play
-      </summary>
-      <div className="mt-4 space-y-3 text-sm leading-6 text-stone-600">
-        <p>Each of us secretly chooses a 4-digit number.</p>
-        <p>Take turns guessing the other person’s number.</p>
-        <p>You only see how many digits are correct. You will not know which digits or where they are.</p>
-        <p>Positions do not matter, and repeated digits are counted fairly.</p>
-        <p className="rounded-2xl bg-rose-50/70 px-4 py-3 ring-1 ring-rose-100">
-          Example: Secret 3452, guess 3333, result 1 right.
+    <div className={align === "right" ? "text-right" : "text-left"}>
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-rose-500">{name}</p>
+      <p className="mt-0.5 text-4xl font-black leading-none text-rose-950">{score}</p>
+    </div>
+  );
+}
+
+function ScoreChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-full bg-white/78 px-3 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-rose-100">
+      <span className="text-rose-700">{label}:</span> {value}
+    </span>
+  );
+}
+
+function ResetScoreModal({
+  isBusy,
+  onCancel,
+  onConfirm
+}: {
+  isBusy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-rose-950/30 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:items-center">
+      <section className="w-full max-w-md rounded-[2rem] bg-white px-5 py-5 shadow-[0_28px_80px_rgba(67,42,45,0.28)] ring-1 ring-rose-100">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
+          Score reset
         </p>
-        <p className="font-semibold text-rose-700">First one to get 4 right wins.</p>
-      </div>
-    </details>
+        <h2 className="mt-2 font-[var(--font-display)] text-3xl text-rose-950">
+          Reset scoreboard?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">
+          This will reset Yuyu and Shosho’s wins back to 0–0. Current rounds and game history may stay, but the scoreboard will start fresh.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isBusy}
+            className="flex-1 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-600 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isBusy}
+            className="flex-1 rounded-2xl bg-rose-700 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBusy ? "Resetting..." : "Reset Score"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EndGameModal({
+  isBusy,
+  onCancel,
+  onConfirm
+}: {
+  isBusy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-rose-950/30 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:items-center">
+      <section className="w-full max-w-md rounded-[2rem] bg-white px-5 py-5 shadow-[0_28px_80px_rgba(67,42,45,0.28)] ring-1 ring-rose-100">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
+          End round
+        </p>
+        <h2 className="mt-2 font-[var(--font-display)] text-3xl text-rose-950">
+          End game?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-stone-600">
+          This will end the current round without a winner. Scores will not change.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isBusy}
+            className="flex-1 rounded-2xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-600 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isBusy}
+            className="flex-1 rounded-2xl bg-rose-700 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBusy ? "Ending..." : "End Game"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -575,7 +733,7 @@ function PlayerStatusCard({
 }) {
   return (
     <div
-      className={`rounded-2xl px-4 py-4 ring-1 transition ${
+      className={`rounded-2xl px-3 py-3 ring-1 transition ${
         isCurrentTurn
           ? "bg-rose-950 text-rose-50 ring-rose-950 shadow-lg shadow-rose-950/20"
           : isReady
@@ -590,11 +748,77 @@ function PlayerStatusCard({
         ) : null}
       </div>
       <p className="mt-1 text-xs font-medium opacity-80">
-        {!isJoined ? "not joined" : isReady ? "secret locked" : "choosing secret"}
+        {!isJoined ? "waiting" : isReady ? "locked" : "choosing"}
       </p>
-      <p className="mt-2 text-xs font-medium opacity-80">{attempts} guesses</p>
-      <p className="mt-1 text-xs font-medium opacity-80">{wins} wins</p>
+      <p className="mt-2 text-xs font-medium opacity-80">
+        {attempts} guesses · {wins} wins
+      </p>
     </div>
+  );
+}
+
+function GameActionButton({
+  bothReady,
+  canGuess,
+  currentUserId,
+  isBusy,
+  isMyTurn,
+  opponentUid,
+  ownSecret,
+  round,
+  onCreateRound,
+  onJoinRound,
+  onLockSecret,
+  onOpenGuess
+}: {
+  bothReady: boolean;
+  canGuess: boolean;
+  currentUserId: string;
+  isBusy: boolean;
+  isMyTurn: boolean;
+  opponentUid: string;
+  ownSecret: NumberGuessSecret | null;
+  round: NumberGuessRound | null;
+  onCreateRound: () => void;
+  onJoinRound: () => void;
+  onLockSecret: () => void;
+  onOpenGuess: () => void;
+}) {
+  let label = "Create Duel";
+  let onClick = onCreateRound;
+  let disabled = isBusy;
+
+  if (round && !round.players[currentUserId]) {
+    label = "Join Duel";
+    onClick = onJoinRound;
+  } else if (round?.status === "finished" || round?.status === "ended") {
+    label = "Rematch";
+    onClick = onCreateRound;
+  } else if (round && !ownSecret) {
+    label = "Lock Secret";
+    onClick = onLockSecret;
+    disabled = isBusy;
+  } else if (round && !bothReady) {
+    label = `Waiting for ${getWaitingSecretName(round, currentUserId)}`;
+    disabled = true;
+  } else if (round?.status === "in_progress" && isMyTurn) {
+    label = "Make Guess";
+    onClick = onOpenGuess;
+    disabled = isBusy || !canGuess;
+  } else if (round?.status === "in_progress") {
+    label = `${getUserDisplayName(opponentUid)}’s turn`;
+    disabled = true;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="mt-4 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20 disabled:cursor-not-allowed disabled:opacity-55"
+    >
+      {label}
+    </button>
   );
 }
 
@@ -608,14 +832,14 @@ function WinnerPanel({
   onRematch: () => void;
 }) {
   return (
-    <section className="mt-5 overflow-hidden rounded-[2rem] bg-rose-950 px-5 py-6 text-center text-rose-50 shadow-[0_22px_52px_rgba(67,42,45,0.24)]">
-      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-rose-50 text-4xl text-rose-950 shadow-inner">
+    <section className="mt-4 overflow-hidden rounded-[1.5rem] bg-rose-950 px-4 py-4 text-center text-rose-50 shadow-[0_18px_38px_rgba(67,42,45,0.22)]">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-3xl text-rose-950 shadow-inner">
         ★
       </div>
-      <h2 className="mt-4 font-[var(--font-display)] text-4xl leading-tight">
+      <h2 className="mt-3 font-[var(--font-display)] text-3xl leading-tight">
         {winnerName} cracked the code!
       </h2>
-      <p className="mt-3 text-sm leading-6 text-rose-100">
+      <p className="mt-2 text-sm leading-6 text-rose-100">
         Won in {attempts || "a few"} guess{attempts === 1 ? "" : "es"}. The arena demands a rematch.
       </p>
       <button
@@ -656,10 +880,10 @@ function GuessModal({
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end bg-rose-950/28 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:items-center sm:justify-center">
+    <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-rose-950/28 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] backdrop-blur-sm sm:items-center">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-[2rem] bg-white px-5 py-6 shadow-[0_28px_80px_rgba(67,42,45,0.28)] ring-1 ring-rose-100"
+        className="mt-6 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white px-5 py-5 shadow-[0_28px_80px_rgba(67,42,45,0.28)] ring-1 ring-rose-100 sm:mt-0"
       >
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
           Make your move
@@ -668,9 +892,9 @@ function GuessModal({
           Guess {opponentName}’s secret
         </h2>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          Type exactly 4 digits. Leading zero is allowed.
+          Only exact positions count.
         </p>
-        <DigitInput label="Guess" value={guess} onChange={setGuess} />
+        <DigitInput autoFocus label="Guess" value={guess} onChange={setGuess} />
         {submitted && !isValid ? (
           <p className="mt-3 text-sm font-medium text-rose-700">
             Enter exactly 4 numeric digits.
@@ -698,18 +922,30 @@ function GuessModal({
   );
 }
 
-function GuessHistory({ guesses }: { guesses: NumberGuessGuess[] }) {
+function GuessHistory({
+  currentUserId,
+  guesses
+}: {
+  currentUserId: string;
+  guesses: NumberGuessGuess[];
+}) {
+  const ownGuesses = guesses.filter((guess) => guess.guessedByUid === currentUserId);
+  const visibleGuesses = [...ownGuesses].reverse().slice(0, 5);
+
   return (
-    <section className="mt-5 rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
-      <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
-        Guess history
-      </p>
-      <div className="mt-4 space-y-3">
-        {guesses.length > 0 ? (
-          [...guesses].reverse().map((guess) => (
+    <section className="mt-4 rounded-[1.5rem] bg-white/82 px-4 py-4 shadow-[0_12px_28px_rgba(176,92,112,0.12)] ring-1 ring-rose-100/90">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-rose-950">Your guesses</p>
+        {ownGuesses.length > 5 ? (
+          <span className="text-xs font-medium text-rose-400">latest 5</span>
+        ) : null}
+      </div>
+      <div className="mt-3 space-y-2">
+        {ownGuesses.length > 0 ? (
+          visibleGuesses.map((guess) => (
             <article
               key={guess.id}
-              className="rounded-2xl bg-rose-50/70 px-4 py-4 ring-1 ring-rose-100"
+              className="rounded-2xl bg-rose-50/70 px-3 py-3 ring-1 ring-rose-100"
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-rose-950">
@@ -727,7 +963,7 @@ function GuessHistory({ guesses }: { guesses: NumberGuessGuess[] }) {
           ))
         ) : (
           <p className="rounded-2xl bg-rose-50/70 px-4 py-4 text-center text-sm font-medium leading-6 text-stone-600 ring-1 ring-rose-100">
-            No guesses yet. The mind games have not started.
+            No guesses yet. Make your first move.
           </p>
         )}
       </div>
@@ -750,6 +986,10 @@ function getRoundMessage(
 
   if (round.status === "finished") {
     return `${round.winnerName || getUserDisplayName(round.winnerUid)} won!`;
+  }
+
+  if (round.status === "ended") {
+    return "Game ended without a winner.";
   }
 
   const currentPlayer = round.players[currentUserId];
@@ -791,16 +1031,7 @@ function getWaitingSecretName(round: NumberGuessRound, currentUserId: string): s
 }
 
 function formatRightCount(count: number): string {
-  switch (count) {
-    case 0:
-      return "No digits matched";
-    case 1:
-      return "1 digit matched";
-    case 4:
-      return "4 digits matched — cracked it!";
-    default:
-      return `${count} digits matched`;
-  }
+  return count === 4 ? "4 correct — code cracked" : `${count} correct`;
 }
 
 function formatStatus(status: NumberGuessRound["status"]): string {
@@ -813,6 +1044,8 @@ function formatStatus(status: NumberGuessRound["status"]): string {
       return "In progress";
     case "finished":
       return "Finished";
+    case "ended":
+      return "Ended";
   }
 }
 
@@ -828,4 +1061,26 @@ function getFriendlyError(error: unknown): string {
   }
 
   return message || "Something went wrong in Number Guess Duel.";
+}
+
+function getScoreResetError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Something went wrong.";
+  console.error("Number Guess Duel score reset failed.", error);
+
+  if (message.includes("permission") || message.includes("PERMISSION_DENIED")) {
+    return "Score reset failed because Firestore permissions blocked it.";
+  }
+
+  return getFriendlyError(error);
+}
+
+function getEndGameError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Something went wrong.";
+  console.error("Number Guess Duel end game failed.", error);
+
+  if (message.includes("permission") || message.includes("PERMISSION_DENIED")) {
+    return "End game failed because Firestore permissions blocked it.";
+  }
+
+  return getFriendlyError(error);
 }

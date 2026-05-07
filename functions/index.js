@@ -398,19 +398,7 @@ function isFourDigitNumber(value) {
 }
 
 function calculateRightCount(secret, guess) {
-  const secretCounts = Array(10).fill(0);
-  const guessCounts = Array(10).fill(0);
-
-  for (const digit of secret) {
-    secretCounts[Number(digit)] += 1;
-  }
-
-  for (const digit of guess) {
-    guessCounts[Number(digit)] += 1;
-  }
-
-  return secretCounts.reduce(
-    (total, secretCount, digit) => total + Math.min(secretCount, guessCounts[digit]),
-    0
-  );
+  return secret.split("").reduce((total, digit, index) => {
+    return total + (guess[index] === digit ? 1 : 0);
+  }, 0);
 }

@@ -31,8 +31,9 @@ import { MonthversaryForm } from "./MonthversaryForm";
 import { NextAnniversaryCard } from "./NextAnniversaryCard";
 import { TimeTogetherCard } from "./TimeTogetherCard";
 import { NudgeCard } from "@/components/nudges/NudgeCard";
+import { GamepadIcon } from "@/components/icons/GamepadIcon";
 
-const MEMORY_CARD_COUNT = 4;
+const MEMORY_CARD_COUNT = 1;
 
 export function AnniversaryPage() {
   const router = useRouter();
@@ -366,8 +367,8 @@ export function AnniversaryPage() {
 
       <section className="mt-5 overflow-hidden rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] bg-rose-100 text-2xl font-black text-rose-500">
-            #
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] bg-rose-100 text-rose-500">
+            <GamepadIcon className="h-8 w-8" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
@@ -424,7 +425,7 @@ export function AnniversaryPage() {
           </div>
         </div>
         {displayedMemories.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             {displayedMemories.map((memory) => (
               <MonthversaryCard
                 key={memory.id}

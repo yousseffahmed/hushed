@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { coupleConfig } from "@/lib/coupleConfig";
+import { GamepadIcon } from "@/components/icons/GamepadIcon";
 
 const comingSoonCards = [
   { title: "Love Letter Blitz", copy: "New game loading..." },
@@ -54,7 +55,7 @@ export function GameCenterPage() {
             <span className="rounded-full bg-rose-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-50">
               Play now
             </span>
-            <span className="text-2xl" aria-hidden="true">#</span>
+            <GamepadIcon className="h-7 w-7 text-rose-500" />
           </div>
           <div className="px-5 py-5">
             <h2 className="font-[var(--font-display)] text-3xl text-rose-950">

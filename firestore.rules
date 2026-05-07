@@ -114,7 +114,29 @@ service cloud.firestore {
 
         match /scores/{userId} {
           allow read: if allowedUser();
-          allow create, update, delete: if false;
+          allow create, update: if allowedUser()
+            && userId in [
+              "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+              "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+            ]
+            && request.resource.data.keys().hasOnly([
+              "uid",
+              "name",
+              "wins",
+              "losses",
+              "roundsPlayed",
+              "totalGuesses",
+              "bestWinAttempts",
+              "updatedAt"
+            ])
+            && request.resource.data.uid == userId
+            && request.resource.data.name is string
+            && request.resource.data.wins == 0
+            && request.resource.data.losses == 0
+            && request.resource.data.roundsPlayed == 0
+            && request.resource.data.totalGuesses == 0
+            && request.resource.data.bestWinAttempts == null;
+          allow delete: if false;
         }
       }
 

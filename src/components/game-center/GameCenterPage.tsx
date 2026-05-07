@@ -28,19 +28,21 @@ export function GameCenterPage() {
         </p>
       </header>
 
-      <section className="overflow-hidden rounded-[2rem] bg-rose-950 px-5 py-6 text-rose-50 shadow-[0_22px_52px_rgba(67,42,45,0.24)]">
-        <div className="-mx-5 -mt-6 mb-5 grid grid-cols-6 gap-2 bg-rose-900/70 px-5 py-3">
-          {Array.from({ length: 12 }).map((_, index) => (
-            <span key={index} className="h-4 rounded-md bg-rose-100/20" />
-          ))}
+      <section className="relative overflow-hidden rounded-[2rem] bg-rose-950 px-5 py-6 text-rose-50 shadow-[0_22px_52px_rgba(67,42,45,0.24)]">
+        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-300/12" />
+        <div className="relative mb-5 flex items-center justify-between gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-rose-50 text-rose-600 shadow-lg shadow-rose-950/25">
+            <GamepadIcon className="h-9 w-9" />
+          </div>
+          <ArcadeControls />
         </div>
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-rose-200">
-          Tiny games
+        <p className="relative text-sm font-semibold uppercase tracking-[0.24em] text-rose-200">
+          Pocket arcade
         </p>
-        <h1 className="mt-2 font-[var(--font-display)] text-5xl leading-[0.95]">
+        <h1 className="relative mt-2 font-[var(--font-display)] text-5xl leading-[0.95]">
           Yushef Game Center
         </h1>
-        <p className="mt-4 text-sm leading-6 text-rose-100">
+        <p className="relative mt-4 text-sm leading-6 text-rose-100">
           Tiny games. Big competition.
         </p>
       </section>
@@ -55,7 +57,9 @@ export function GameCenterPage() {
             <span className="rounded-full bg-rose-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-rose-50">
               Play now
             </span>
-            <GamepadIcon className="h-7 w-7 text-rose-500" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-rose-500 shadow-sm ring-1 ring-rose-100">
+              <GamepadIcon className="h-6 w-6" />
+            </span>
           </div>
           <div className="px-5 py-5">
             <h2 className="font-[var(--font-display)] text-3xl text-rose-950">
@@ -82,13 +86,39 @@ export function GameCenterPage() {
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-stone-500">{card.copy}</p>
               </div>
-              <span className="rounded-full bg-rose-50 px-3 py-2 text-lg text-rose-400" aria-hidden="true">
-                ♡
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-300 ring-1 ring-rose-100" aria-hidden="true">
+                <span className="grid grid-cols-2 gap-1">
+                  <span className="h-2 w-2 rounded-full bg-rose-300/70" />
+                  <span className="h-2 w-2 rounded-full bg-rose-300/45" />
+                  <span className="h-2 w-2 rounded-full bg-rose-300/45" />
+                  <span className="h-2 w-2 rounded-full bg-rose-300/70" />
+                </span>
               </span>
             </div>
           </article>
         ))}
       </section>
     </main>
+  );
+}
+
+function ArcadeControls() {
+  return (
+    <div className="flex items-center gap-3 rounded-[1.5rem] bg-rose-900/70 px-3 py-3 ring-1 ring-rose-100/10">
+      <div className="grid h-12 w-12 grid-cols-3 grid-rows-3 gap-1" aria-hidden="true">
+        <span className="col-start-2 rounded-md bg-rose-100/30" />
+        <span className="row-start-2 rounded-md bg-rose-100/30" />
+        <span className="row-start-2 rounded-md bg-rose-100/55" />
+        <span className="row-start-2 rounded-md bg-rose-100/30" />
+        <span className="col-start-2 row-start-3 rounded-md bg-rose-100/30" />
+      </div>
+      <div className="flex items-end gap-2" aria-hidden="true">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-50/95 shadow-md shadow-rose-950/20">
+          <span className="h-3 w-3 rounded-full bg-rose-500" />
+        </span>
+        <span className="h-7 w-7 rounded-full bg-rose-300/80 shadow-md shadow-rose-950/20" />
+        <span className="h-5 w-5 rounded-full bg-rose-100/80 shadow-md shadow-rose-950/20" />
+      </div>
+    </div>
   );
 }

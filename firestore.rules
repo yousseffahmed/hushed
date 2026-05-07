@@ -80,6 +80,44 @@ service cloud.firestore {
         allow read, create, update, delete: if allowedUser();
       }
 
+      match /games/{gameId} {
+        allow read: if allowedUser();
+
+        match /rounds/{roundId} {
+          allow read: if allowedUser();
+          allow create: if allowedUser()
+            && request.resource.data.createdByUid == request.auth.uid;
+          allow update: if allowedUser()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "players",
+              "status",
+              "currentTurnUid",
+              "updatedAt"
+            ]);
+          allow delete: if allowedUser();
+
+          match /secrets/{userId} {
+            allow read, delete: if allowedUser()
+              && request.auth.uid == userId;
+            allow create, update: if allowedUser()
+              && request.auth.uid == userId
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.secretNumber is string
+              && request.resource.data.secretNumber.matches("^[0-9]{4}$");
+          }
+
+          match /guesses/{guessId} {
+            allow read: if allowedUser();
+            allow create, update, delete: if false;
+          }
+        }
+
+        match /scores/{userId} {
+          allow read: if allowedUser();
+          allow create, update, delete: if false;
+        }
+      }
+
       match /notificationTokens/{userId}/tokens/{tokenId} {
         allow read, create, update, delete: if allowedUser()
           && request.auth.uid == userId;

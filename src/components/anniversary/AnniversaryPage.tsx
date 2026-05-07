@@ -364,6 +364,32 @@ export function AnniversaryPage() {
         </button>
       </section>
 
+      <section className="mt-5 overflow-hidden rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
+        <div className="flex items-start gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] bg-rose-100 text-2xl font-black text-rose-500">
+            #
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
+              Game Center
+            </p>
+            <h2 className="mt-1 font-[var(--font-display)] text-3xl leading-tight text-rose-950">
+              Tiny games, big competition
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              Start a soft little battle with Number Guess Duel.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/game-center")}
+          className="mt-5 w-full rounded-2xl bg-rose-950 px-4 py-3 text-sm font-semibold text-rose-50 shadow-lg shadow-rose-950/20"
+        >
+          Open Game Center
+        </button>
+      </section>
+
       <section className="mt-7">
         <div className="mb-4 space-y-3">
           <div className="flex items-center justify-between gap-4">

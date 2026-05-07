@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 import {
   getFirestore,
   initializeFirestore,
@@ -46,6 +47,7 @@ export function getFirebaseServices() {
     app,
     auth: getAuth(app),
     db,
+    functions: getFunctions(app),
     storage: getStorage(app)
   };
 }

@@ -374,6 +374,8 @@ export function NumberGuessDuelPage() {
           </div>
         ) : null}
 
+        {round ? <OpponentLastGuess currentUserId={currentUser.uid} guesses={guesses} /> : null}
+
         {round?.status === "finished" ? (
           <WinnerPanel
             attempts={winnerGuess?.attemptNumber ?? round.players[round.winnerUid]?.attempts ?? 0}
@@ -930,17 +932,19 @@ function GuessHistory({
   guesses: NumberGuessGuess[];
 }) {
   const ownGuesses = guesses.filter((guess) => guess.guessedByUid === currentUserId);
-  const visibleGuesses = [...ownGuesses].reverse().slice(0, 5);
+  const visibleGuesses = [...ownGuesses].reverse();
 
   return (
     <section className="mt-4 rounded-[1.5rem] bg-white/82 px-4 py-4 shadow-[0_12px_28px_rgba(176,92,112,0.12)] ring-1 ring-rose-100/90">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-rose-950">Your guesses</p>
-        {ownGuesses.length > 5 ? (
-          <span className="text-xs font-medium text-rose-400">latest 5</span>
+        {ownGuesses.length > 0 ? (
+          <span className="text-xs font-medium text-rose-400">
+            {ownGuesses.length} total
+          </span>
         ) : null}
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
         {ownGuesses.length > 0 ? (
           visibleGuesses.map((guess) => (
             <article
@@ -967,6 +971,45 @@ function GuessHistory({
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+function OpponentLastGuess({
+  currentUserId,
+  guesses
+}: {
+  currentUserId: string;
+  guesses: NumberGuessGuess[];
+}) {
+  const opponentGuess = [...guesses]
+    .reverse()
+    .find((guess) => guess.guessedByUid !== currentUserId);
+
+  return (
+    <section className="mt-3 rounded-2xl bg-rose-50/70 px-3 py-3 ring-1 ring-rose-100">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-400">
+          {opponentGuess ? `${opponentGuess.guessedByName}’s last guess` : "Opponent’s last guess"}
+        </p>
+        <span className="rounded-full bg-white/80 px-2.5 py-1 text-[0.65rem] font-bold text-rose-600 ring-1 ring-rose-100">
+          Rivalry
+        </span>
+      </div>
+      {opponentGuess ? (
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <p className="font-mono text-2xl font-black tracking-[0.16em] text-rose-950">
+            {opponentGuess.guess} - {opponentGuess.rightCount}
+          </p>
+          <p className="text-right text-xs font-semibold leading-5 text-stone-500">
+            correct positions
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm font-medium leading-6 text-stone-600">
+          Waiting for their first guess…
+        </p>
+      )}
     </section>
   );
 }

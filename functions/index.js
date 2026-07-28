@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getUserDisplayName } = require("./coupleUsers");
@@ -176,6 +176,180 @@ exports.sendNudgeNotification = onDocumentCreated(
         coupleId,
         nudgeId,
         totalDurationMs: Date.now() - functionStartMs,
+        error
+      });
+    }
+  }
+);
+
+exports.sendTheaterReadyNotification = onDocumentUpdated(
+  "couples/{coupleId}/theaterSession/{sessionId}",
+  async (event) => {
+    const { coupleId, sessionId } = event.params;
+    const sessionPath = `couples/${coupleId}/theaterSession/${sessionId}`;
+
+    try {
+      if (!event.data) {
+        logger.warn("Theater session update data is missing.", {
+          coupleId,
+          sessionId,
+          sessionPath
+        });
+        return;
+      }
+
+      const beforeReadyUsers = event.data.before.data()?.readyUsers || {};
+      const afterReadyUsers = event.data.after.data()?.readyUsers || {};
+      const newlyReadyUserIds = allowedUserIds.filter(
+        (uid) => !Boolean(beforeReadyUsers[uid]?.ready) && Boolean(afterReadyUsers[uid]?.ready)
+      );
+
+      if (newlyReadyUserIds.length === 0) {
+        return;
+      }
+
+      for (const readyUid of newlyReadyUserIds) {
+        const recipientUid = allowedUserIds.find((uid) => uid !== readyUid);
+        const readyName = getUserDisplayName(readyUid);
+
+        if (!recipientUid) {
+          logger.warn("Theater-ready notification recipient could not be resolved.", {
+            coupleId,
+            sessionId,
+            sessionPath,
+            readyUid
+          });
+          continue;
+        }
+
+        const eventId = String(event.id || `${sessionId}-${readyUid}`).replace(/\//g, "_");
+        const deliveryRef = admin
+          .firestore()
+          .collection("couples")
+          .doc(coupleId)
+          .collection("notificationDeliveries")
+          .doc(`${eventId}-${readyUid}`);
+
+        try {
+          await deliveryRef.create({
+            type: "theater_ready",
+            readyUid,
+            recipientUid,
+            sessionPath,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } catch (error) {
+          const isDuplicate =
+            error?.code === 6 ||
+            error?.code === "already-exists" ||
+            error?.code === "firestore/already-exists";
+
+          if (isDuplicate) {
+            logger.info("Duplicate Theater-ready event skipped.", {
+              coupleId,
+              sessionId,
+              sessionPath,
+              readyUid,
+              recipientUid
+            });
+            continue;
+          }
+
+          throw error;
+        }
+
+        const tokensSnapshot = await admin
+          .firestore()
+          .collection("couples")
+          .doc(coupleId)
+          .collection("notificationTokens")
+          .doc(recipientUid)
+          .collection("tokens")
+          .get();
+
+        const tokenEntries = tokensSnapshot.docs
+          .map((tokenDoc) => ({
+            ref: tokenDoc.ref,
+            token: tokenDoc.data().token
+          }))
+          .filter((entry) => typeof entry.token === "string" && entry.token.trim().length > 0);
+        const tokens = tokenEntries.map((entry) => entry.token.trim());
+
+        if (tokens.length === 0) {
+          await deliveryRef.update({
+            status: "no_tokens",
+            completedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          logger.info("No notification tokens found for Theater-ready recipient.", {
+            coupleId,
+            sessionId,
+            sessionPath,
+            readyUid,
+            recipientUid
+          });
+          continue;
+        }
+
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens,
+          notification: {
+            title: `${readyName} is ready 🍿`,
+            body: "Your movie date is waiting in Yushef Theater 💗"
+          },
+          data: {
+            type: "theater_ready",
+            coupleId: String(coupleId),
+            sessionId: String(sessionId),
+            readyUid: String(readyUid),
+            readyName: String(readyName)
+          }
+        });
+
+        const invalidTokenRefs = response.responses
+          .map((sendResponse, index) => {
+            if (sendResponse.success) {
+              return null;
+            }
+
+            const errorCode = sendResponse.error && sendResponse.error.code;
+            const isInvalidToken =
+              errorCode === "messaging/registration-token-not-registered" ||
+              errorCode === "messaging/invalid-registration-token" ||
+              errorCode === "messaging/invalid-argument";
+
+            return isInvalidToken ? tokenEntries[index].ref : null;
+          })
+          .filter(Boolean);
+
+        if (invalidTokenRefs.length > 0) {
+          await Promise.all(invalidTokenRefs.map((tokenRef) => tokenRef.delete()));
+        }
+
+        await deliveryRef.update({
+          status: response.successCount > 0 ? "sent" : "failed",
+          successCount: response.successCount,
+          failureCount: response.failureCount,
+          invalidTokenCount: invalidTokenRefs.length,
+          completedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        logger.info("Theater-ready notification processed.", {
+          coupleId,
+          sessionId,
+          sessionPath,
+          readyUid,
+          readyName,
+          recipientUid,
+          successCount: response.successCount,
+          failureCount: response.failureCount,
+          invalidTokenCount: invalidTokenRefs.length
+        });
+      }
+    } catch (error) {
+      logger.error("Failed to process Theater-ready notification.", {
+        coupleId,
+        sessionId,
+        sessionPath,
         error
       });
     }

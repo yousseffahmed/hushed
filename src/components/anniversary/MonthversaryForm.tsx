@@ -5,6 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { coupleConfig } from "@/lib/coupleConfig";
 import {
   formatDateInputValue,
+  getMonthNumberForDate,
   getMonthversaryDate,
   parseLocalDate
 } from "@/lib/dateUtils";
@@ -29,8 +30,11 @@ export function MonthversaryForm({
   onCancel,
   onSave
 }: MonthversaryFormProps) {
-  const [monthNumber, setMonthNumber] = useState(initialMemory?.monthNumber ?? 1);
-  const [date, setDate] = useState(() => initialMemory?.date ?? getDefaultDate(1));
+  const initialDate = initialMemory?.date ?? getDefaultDate(0);
+  const [monthNumber, setMonthNumber] = useState(() =>
+    getMonthNumberForDate(initialDate, coupleConfig.startDate)
+  );
+  const [date, setDate] = useState(initialDate);
   const [title, setTitle] = useState(initialMemory?.title ?? "");
   const [description, setDescription] = useState(initialMemory?.description ?? "");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -55,20 +59,13 @@ export function MonthversaryForm({
   }, [date]);
 
   const titleError = submitted && !title.trim() ? "Title is required." : "";
-  const monthError = submitted && monthNumber < 1 ? "Month number must be positive." : "";
+  const monthError =
+    submitted && monthNumber < 0 ? "Month number must be Month 0 or later." : "";
   const dateError = submitted && !parsedDate ? "Choose a valid date." : "";
   const dateWarning =
     parsedDate && parsedDate.getDate() !== coupleConfig.anniversaryDay
       ? "Our monthversaries are usually on the 19th."
       : "";
-
-  useEffect(() => {
-    if (initialMemory) {
-      return;
-    }
-
-    setDate(getDefaultDate(monthNumber));
-  }, [initialMemory, monthNumber]);
 
   useEffect(() => {
     return () => {
@@ -80,7 +77,7 @@ export function MonthversaryForm({
     event.preventDefault();
     setSubmitted(true);
 
-    if (!title.trim() || monthNumber < 1 || !parsedDate) {
+    if (!title.trim() || monthNumber < 0 || !parsedDate) {
       return;
     }
 
@@ -149,10 +146,17 @@ export function MonthversaryForm({
             <span className="text-sm font-semibold text-rose-950">Month number</span>
             <input
               className="mt-2 w-full rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-3 text-rose-950 outline-none ring-rose-200 transition focus:ring-2"
-              min="1"
+              min="0"
               type="number"
               value={monthNumber}
-              onChange={(event) => setMonthNumber(Number(event.target.value))}
+              onChange={(event) => {
+                const nextMonthNumber = Number(event.target.value);
+                setMonthNumber(nextMonthNumber);
+
+                if (Number.isInteger(nextMonthNumber) && nextMonthNumber >= 0) {
+                  setDate(getDefaultDate(nextMonthNumber));
+                }
+              }}
             />
             {monthError ? <span className="mt-1 block text-xs font-medium text-rose-700">{monthError}</span> : null}
           </label>
@@ -163,7 +167,18 @@ export function MonthversaryForm({
               className="mt-2 w-full rounded-2xl border border-rose-100 bg-rose-50/60 px-4 py-3 text-rose-950 outline-none ring-rose-200 transition focus:ring-2"
               type="date"
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(event) => {
+                const nextDate = event.target.value;
+                setDate(nextDate);
+
+                try {
+                  setMonthNumber(
+                    getMonthNumberForDate(nextDate, coupleConfig.startDate)
+                  );
+                } catch {
+                  // Keep the current month number while the date input is incomplete.
+                }
+              }}
             />
             {dateError ? <span className="mt-1 block text-xs font-medium text-rose-700">{dateError}</span> : null}
             {dateWarning ? <span className="mt-1 block text-xs font-medium text-rose-500">{dateWarning}</span> : null}
@@ -262,6 +277,6 @@ export function MonthversaryForm({
 
 function getDefaultDate(monthNumber: number): string {
   return formatDateInputValue(
-    getMonthversaryDate(coupleConfig.startDate, Math.max(1, monthNumber), coupleConfig.anniversaryDay)
+    getMonthversaryDate(coupleConfig.startDate, Math.max(0, monthNumber), coupleConfig.anniversaryDay)
   );
 }

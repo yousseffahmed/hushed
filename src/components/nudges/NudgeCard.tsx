@@ -129,11 +129,16 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
 
     listenForForegroundMessages((payload) => {
       const message = payload.notification?.body || payload.data?.message || "A little nudge arrived.";
+      const isTheaterReady = payload.data?.type === "theater_ready";
       const senderName =
-        payload.data?.fromName ||
+        (isTheaterReady ? payload.data?.readyName : payload.data?.fromName) ||
         getUserDisplayName(payload.data?.fromUid || payload.data?.fromUserId);
 
-      setForegroundNudge(`from ${senderName}: ${message}`);
+      setForegroundNudge(
+        isTheaterReady
+          ? `${senderName} is ready 🍿 — ${message}`
+          : `from ${senderName}: ${message}`
+      );
       window.setTimeout(() => setForegroundNudge(""), 5000);
     })
       .then((nextUnsubscribe) => {
@@ -229,7 +234,7 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
     <section className="mt-7 space-y-4">
       {foregroundNudge ? (
         <div className="rounded-3xl bg-rose-950 px-5 py-4 text-sm font-semibold text-rose-50 shadow-[0_18px_44px_rgba(67,42,45,0.22)]">
-          New nudge: {foregroundNudge}
+          New notification: {foregroundNudge}
         </div>
       ) : null}
 

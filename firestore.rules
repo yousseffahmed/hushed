@@ -14,6 +14,21 @@ service cloud.firestore {
         ];
     }
 
+    function validOwnTheaterReadiness(data) {
+      let readyUsers = data.get("readyUsers", {});
+      let ownReadiness = readyUsers.get(request.auth.uid, {});
+      return readyUsers is map
+        && (
+          !readyUsers.keys().hasAny([request.auth.uid])
+          || (
+            ownReadiness is map
+            && ownReadiness.ready is bool
+            && ownReadiness.name is string
+            && (ownReadiness.readyAt is timestamp || ownReadiness.readyAt == null)
+          )
+        );
+    }
+
     match /couples/{coupleId} {
       allow read: if allowedUser();
 
@@ -77,7 +92,17 @@ service cloud.firestore {
       }
 
       match /theaterSession/{sessionId} {
-        allow read, create, update, delete: if allowedUser();
+        allow read: if allowedUser();
+        allow create: if allowedUser()
+          && request.resource.data.get("readyUsers", {}).keys().hasOnly([request.auth.uid])
+          && validOwnTheaterReadiness(request.resource.data);
+        allow update: if allowedUser()
+          && request.resource.data.get("readyUsers", {})
+            .diff(resource.data.get("readyUsers", {}))
+            .affectedKeys()
+            .hasOnly([request.auth.uid])
+          && validOwnTheaterReadiness(request.resource.data);
+        allow delete: if allowedUser();
       }
 
       match /games/{gameId} {

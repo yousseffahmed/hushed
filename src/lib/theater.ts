@@ -71,9 +71,16 @@ export type TheaterPresence = {
   lastSeenAt: number;
 };
 
+export type TheaterReadiness = {
+  name: string;
+  ready: boolean;
+  readyAt: string;
+};
+
 export type TheaterSession = {
   active: boolean;
   presentUsers: Record<string, TheaterPresence>;
+  readyUsers: Record<string, TheaterReadiness>;
   selectedItemId: string;
   countdownState: "idle" | "counting" | "finished";
   countdownStartedAt: string;
@@ -301,6 +308,32 @@ export async function leaveTheater(coupleId: string, userId: string): Promise<vo
   });
 }
 
+export async function setTheaterReady(
+  coupleId: string,
+  userId: string,
+  ready: boolean
+): Promise<void> {
+  const { db } = getFirebaseServices();
+  const sessionRef = doc(db, "couples", coupleId, "theaterSession", "current");
+
+  await setDoc(
+    sessionRef,
+    {
+      active: true,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+  await updateDoc(sessionRef, {
+    [`readyUsers.${userId}`]: {
+      name: getUserDisplayName(userId),
+      ready,
+      readyAt: ready ? serverTimestamp() : null
+    },
+    updatedAt: serverTimestamp()
+  });
+}
+
 export async function startTheaterCountdown(
   coupleId: string,
   userId: string,
@@ -410,6 +443,7 @@ function mapTheaterSessionDoc(data: Record<string, unknown>): TheaterSession {
   return {
     active: Boolean(data.active),
     presentUsers: mapPresence(data.presentUsers),
+    readyUsers: mapReadiness(data.readyUsers),
     selectedItemId: typeof data.selectedItemId === "string" ? data.selectedItemId : "",
     countdownState: isCountdownState(data.countdownState) ? data.countdownState : "idle",
     countdownStartedAt: stringifyTimestamp(data.countdownStartedAt),
@@ -440,6 +474,26 @@ function mapPresence(value: unknown): Record<string, TheaterPresence> {
             : getUserDisplayName(uid),
         joinedAt: stringifyTimestamp(presence.joinedAt),
         lastSeenAt: getNumber(presence.lastSeenAt) ?? getMillis(presence.lastSeenAt) ?? 0
+      }
+    ])
+  );
+}
+
+function mapReadiness(value: unknown): Record<string, TheaterReadiness> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, Record<string, unknown>>).map(([uid, readiness]) => [
+      uid,
+      {
+        name:
+          typeof readiness.name === "string" && readiness.name
+            ? readiness.name
+            : getUserDisplayName(uid),
+        ready: Boolean(readiness.ready),
+        readyAt: stringifyTimestamp(readiness.readyAt)
       }
     ])
   );

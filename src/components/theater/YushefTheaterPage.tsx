@@ -19,6 +19,7 @@ import {
   markTheaterPresent,
   resetTheaterCountdown,
   setTheaterRating,
+  setTheaterReady,
   startTheaterCountdown,
   subscribeToTheaterComments,
   subscribeToTheaterItems,
@@ -31,6 +32,7 @@ import {
   type TheaterItem,
   type TheaterItemInput,
   type TheaterItemType,
+  type TheaterReadiness,
   type TheaterSession,
   type TheaterStatus
 } from "@/lib/theater";
@@ -47,6 +49,7 @@ const filters: Array<{ id: TheaterFilter; label: string }> = [
 const emptySession: TheaterSession = {
   active: false,
   presentUsers: {},
+  readyUsers: {},
   selectedItemId: "",
   countdownState: "idle",
   countdownStartedAt: "",
@@ -73,6 +76,7 @@ export function YushefTheaterPage() {
   const [commentsItem, setCommentsItem] = useState<TheaterItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<TheaterItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingReady, setIsSavingReady] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -241,6 +245,30 @@ export function YushefTheaterPage() {
     }
   }
 
+  async function handleToggleReady() {
+    if (!currentUser) {
+      return;
+    }
+
+    const nextReady = !session.readyUsers[currentUser.uid]?.ready;
+    setIsSavingReady(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      await setTheaterReady(coupleConfig.coupleId, currentUser.uid, nextReady);
+      setSuccessMessage(
+        nextReady
+          ? "You’re ready 🍿 Your movie date will get a little nudge."
+          : "You’re no longer marked ready."
+      );
+    } catch (error) {
+      setErrorMessage(getFriendlyError(error));
+    } finally {
+      setIsSavingReady(false);
+    }
+  }
+
   async function handleResetCountdown() {
     setErrorMessage("");
 
@@ -328,7 +356,14 @@ export function YushefTheaterPage() {
       <TheaterHero onAdd={() => setIsFormOpen(true)} />
 
       <section className="mt-5 grid gap-4">
-        <PresenceCard activePresence={activePresence} missingNames={missingNames} />
+        <PresenceCard
+          activePresence={activePresence}
+          currentUserId={currentUser.uid}
+          isSavingReady={isSavingReady}
+          missingNames={missingNames}
+          readyUsers={session.readyUsers}
+          onToggleReady={handleToggleReady}
+        />
         <CountdownCard
           bothPresent={bothPresent}
           countdown={countdown}
@@ -471,11 +506,21 @@ function TheaterHero({ onAdd }: { onAdd: () => void }) {
 
 function PresenceCard({
   activePresence,
-  missingNames
+  currentUserId,
+  isSavingReady,
+  missingNames,
+  readyUsers,
+  onToggleReady
 }: {
   activePresence: Record<string, { name: string }>;
+  currentUserId: string;
+  isSavingReady: boolean;
   missingNames: string[];
+  readyUsers: Record<string, TheaterReadiness>;
+  onToggleReady: () => void;
 }) {
+  const currentUserReady = Boolean(readyUsers[currentUserId]?.ready);
+
   return (
     <section className="rounded-[2rem] bg-white/82 px-5 py-5 shadow-[0_18px_42px_rgba(176,92,112,0.14)] ring-1 ring-rose-100/90">
       <p className="text-sm font-medium uppercase tracking-[0.2em] text-rose-400">
@@ -484,6 +529,7 @@ function PresenceCard({
       <div className="mt-4 grid grid-cols-2 gap-3">
         {coupleUsers.allowedUserIds.map((uid) => {
           const present = Boolean(activePresence[uid]);
+          const ready = Boolean(readyUsers[uid]?.ready);
           const name = getUserDisplayName(uid);
 
           return (
@@ -499,6 +545,9 @@ function PresenceCard({
               <p className="mt-1 text-xs font-medium opacity-80">
                 {present ? "is here" : "not here yet"}
               </p>
+              <p className="mt-2 text-xs font-semibold opacity-90">
+                {ready ? "ready with popcorn 🍿" : "not ready yet"}
+              </p>
             </div>
           );
         })}
@@ -508,6 +557,22 @@ function PresenceCard({
           ? "Both seats are warm. You can start together."
           : `Waiting for ${missingNames.join(" and ")} to join.`}
       </p>
+      <button
+        type="button"
+        onClick={onToggleReady}
+        disabled={isSavingReady}
+        className={`mt-4 w-full rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-60 ${
+          currentUserReady
+            ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+            : "bg-rose-950 text-rose-50 shadow-rose-950/20"
+        }`}
+      >
+        {isSavingReady
+          ? "Saving..."
+          : currentUserReady
+            ? "I’m not ready yet"
+            : "I’m Ready 🍿"}
+      </button>
     </section>
   );
 }

@@ -20,7 +20,11 @@ import {
   uploadBytesResumable
 } from "firebase/storage";
 import { coupleConfig } from "@/lib/coupleConfig";
-import { formatDateInputValue, getMonthversaryDate } from "@/lib/dateUtils";
+import {
+  formatDateInputValue,
+  getMonthNumberForDate,
+  getMonthversaryDate
+} from "@/lib/dateUtils";
 import { getFirebaseServices } from "@/lib/firebase";
 
 export type MonthversaryPhoto = {
@@ -78,13 +82,20 @@ export function subscribeToMonthversaries(
   const { db } = getFirebaseServices();
   const monthversariesQuery = query(
     collection(db, "couples", coupleId, "monthversaries"),
-    orderBy("monthNumber", "asc")
+    orderBy("date", "asc")
   );
 
   return onSnapshot(
     monthversariesQuery,
     (snapshot) => {
-      callback(snapshot.docs.map((memoryDoc) => mapMemoryDoc(memoryDoc.id, memoryDoc.data())));
+      callback(
+        snapshot.docs
+          .map((memoryDoc) => mapMemoryDoc(memoryDoc.id, memoryDoc.data()))
+          .sort(
+            (first, second) =>
+              first.monthNumber - second.monthNumber || first.date.localeCompare(second.date)
+          )
+      );
     },
     (error) => onError?.(error)
   );
@@ -112,8 +123,9 @@ export async function addMonthversary(
 ): Promise<string> {
   const { db } = getFirebaseServices();
   const monthversaryCollection = collection(db, "couples", coupleId, "monthversaries");
+  const monthNumber = getMonthNumberForDate(data.date, coupleConfig.startDate);
   const docRef = await addDoc(monthversaryCollection, {
-    monthNumber: data.monthNumber,
+    monthNumber,
     date: data.date,
     title: data.title.trim(),
     description: data.description?.trim() || "",
@@ -133,9 +145,10 @@ export async function updateMonthversary(
   data: MonthversaryMemoryInput
 ): Promise<void> {
   const { db } = getFirebaseServices();
+  const monthNumber = getMonthNumberForDate(data.date, coupleConfig.startDate);
 
   await updateDoc(doc(db, "couples", coupleId, "monthversaries", memoryId), {
-    monthNumber: data.monthNumber,
+    monthNumber,
     date: data.date,
     title: data.title.trim(),
     description: data.description?.trim() || "",
@@ -249,7 +262,7 @@ export function getDefaultMonthversaryMemories(createdBy = "seed"): Monthversary
   const createdAt = new Date().toISOString();
 
   return defaultMemoryTitles.map((title, index) => {
-    const monthNumber = index + 1;
+    const monthNumber = index;
     const date = getMonthversaryDate(
       coupleConfig.startDate,
       monthNumber,
@@ -271,10 +284,22 @@ export function getDefaultMonthversaryMemories(createdBy = "seed"): Monthversary
 }
 
 function mapMemoryDoc(id: string, data: Record<string, unknown>): MonthversaryMemory {
+  const date = typeof data.date === "string" ? data.date : "";
+  const storedMonthNumber = typeof data.monthNumber === "number" ? data.monthNumber : 0;
+  let monthNumber = storedMonthNumber;
+
+  if (date) {
+    try {
+      monthNumber = getMonthNumberForDate(date, coupleConfig.startDate);
+    } catch {
+      monthNumber = storedMonthNumber;
+    }
+  }
+
   return {
     id: typeof data.id === "string" ? data.id : id,
-    monthNumber: typeof data.monthNumber === "number" ? data.monthNumber : 1,
-    date: typeof data.date === "string" ? data.date : "",
+    monthNumber,
+    date,
     title: typeof data.title === "string" ? data.title : "",
     description: typeof data.description === "string" ? data.description : "",
     photos: Array.isArray(data.photos) ? (data.photos as MonthversaryPhoto[]) : [],

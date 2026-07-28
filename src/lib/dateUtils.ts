@@ -118,9 +118,22 @@ export function getMonthversaryDate(
 ): Date {
   const start = normalizeDateInput(startDate);
   const firstMonthOffset = start.getDate() <= anniversaryDay ? 0 : 1;
-  const monthOffset = firstMonthOffset + Math.max(1, monthNumber) - 1;
+  const monthOffset = firstMonthOffset + Math.max(0, monthNumber);
 
   return buildMonthlyDate(start.getFullYear(), start.getMonth() + monthOffset, anniversaryDay);
+}
+
+export function getMonthNumberForDate(
+  memoryDate: string | Date,
+  startDate: string | Date
+): number {
+  const memory = normalizeDateInput(memoryDate);
+  const start = normalizeDateInput(startDate);
+
+  return (
+    (memory.getFullYear() - start.getFullYear()) * 12 +
+    (memory.getMonth() - start.getMonth())
+  );
 }
 
 export function isSameLocalDay(first: Date, second: Date): boolean {

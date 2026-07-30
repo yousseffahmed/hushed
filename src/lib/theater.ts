@@ -20,10 +20,22 @@ import { getFirebaseServices } from "@/lib/firebase";
 
 export const theaterItemTypes = ["movie", "series", "episode", "other"] as const;
 export const theaterStatuses = ["want_to_watch", "watching", "watched"] as const;
+export const theaterSortOptions = [
+  "recently-added",
+  "oldest-added",
+  "title-asc",
+  "title-desc",
+  "highest-rated",
+  "lowest-rated",
+  "recently-updated",
+  "status",
+  "type"
+] as const;
 
 export type TheaterItemType = (typeof theaterItemTypes)[number];
 export type TheaterStatus = (typeof theaterStatuses)[number];
 export type TheaterFilter = "all" | TheaterStatus;
+export type TheaterSort = (typeof theaterSortOptions)[number];
 
 export type TheaterRating = {
   stars: number;
@@ -401,6 +413,182 @@ export function getMissingTheaterNames(activePresence: Record<string, TheaterPre
     .map((uid) => getUserDisplayName(uid));
 }
 
+export function isTheaterSort(value: unknown): value is TheaterSort {
+  return (
+    typeof value === "string" &&
+    theaterSortOptions.includes(value as TheaterSort)
+  );
+}
+
+export function getTheaterAverageRating(
+  item: Pick<TheaterItem, "ratings">
+): number | null {
+  if (!item.ratings || typeof item.ratings !== "object") {
+    return null;
+  }
+
+  const validRatings = Object.values(
+    item.ratings as Record<string, unknown>
+  )
+    .map((rating) => {
+      if (typeof rating === "number") {
+        return rating;
+      }
+
+      if (rating && typeof rating === "object") {
+        return (rating as { stars?: unknown }).stars;
+      }
+
+      return null;
+    })
+    .filter(
+      (stars): stars is number =>
+        typeof stars === "number" &&
+        Number.isFinite(stars) &&
+        stars >= 1 &&
+        stars <= 5
+    );
+
+  if (validRatings.length === 0) {
+    return null;
+  }
+
+  return (
+    validRatings.reduce((total, stars) => total + stars, 0) /
+    validRatings.length
+  );
+}
+
+export function getTheaterTimestamp(value: unknown): number | null {
+  if (value instanceof Date) {
+    const milliseconds = value.getTime();
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (typeof value === "string") {
+    const milliseconds = Date.parse(value);
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  if (typeof (value as Timestamp).toMillis === "function") {
+    const milliseconds = (value as Timestamp).toMillis();
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  const serialized = value as {
+    seconds?: unknown;
+    _seconds?: unknown;
+    nanoseconds?: unknown;
+    _nanoseconds?: unknown;
+  };
+  const seconds =
+    typeof serialized.seconds === "number"
+      ? serialized.seconds
+      : typeof serialized._seconds === "number"
+        ? serialized._seconds
+        : null;
+
+  if (seconds === null || !Number.isFinite(seconds)) {
+    return null;
+  }
+
+  const nanoseconds =
+    typeof serialized.nanoseconds === "number"
+      ? serialized.nanoseconds
+      : typeof serialized._nanoseconds === "number"
+        ? serialized._nanoseconds
+        : 0;
+
+  return seconds * 1000 + nanoseconds / 1_000_000;
+}
+
+export function sortTheaterItems(
+  items: TheaterItem[],
+  sort: TheaterSort
+): TheaterItem[] {
+  const statusOrder: Record<TheaterStatus, number> = {
+    watching: 0,
+    want_to_watch: 1,
+    watched: 2
+  };
+  const typeOrder: Record<TheaterItemType, number> = {
+    movie: 0,
+    series: 1,
+    episode: 2,
+    other: 3
+  };
+
+  return [...items].sort((first, second) => {
+    switch (sort) {
+      case "oldest-added":
+        return (
+          compareNullableNumbers(
+            getTheaterTimestamp(first.createdAt),
+            getTheaterTimestamp(second.createdAt),
+            "asc"
+          ) || compareTitles(first, second)
+        );
+      case "title-asc":
+        return compareTitles(first, second) || compareNewestCreated(first, second);
+      case "title-desc":
+        return compareTitles(second, first) || compareNewestCreated(first, second);
+      case "highest-rated":
+        return (
+          compareNullableNumbers(
+            getTheaterAverageRating(first),
+            getTheaterAverageRating(second),
+            "desc"
+          ) ||
+          compareTitles(first, second) ||
+          compareNewestCreated(first, second)
+        );
+      case "lowest-rated":
+        return (
+          compareNullableNumbers(
+            getTheaterAverageRating(first),
+            getTheaterAverageRating(second),
+            "asc"
+          ) ||
+          compareTitles(first, second) ||
+          compareNewestCreated(first, second)
+        );
+      case "recently-updated":
+        return (
+          compareNullableNumbers(
+            getTheaterTimestamp(first.updatedAt) ??
+              getTheaterTimestamp(first.createdAt),
+            getTheaterTimestamp(second.updatedAt) ??
+              getTheaterTimestamp(second.createdAt),
+            "desc"
+          ) || compareTitles(first, second)
+        );
+      case "status":
+        return (
+          statusOrder[first.status] - statusOrder[second.status] ||
+          compareNewestCreated(first, second) ||
+          compareTitles(first, second)
+        );
+      case "type":
+        return (
+          typeOrder[first.type] - typeOrder[second.type] ||
+          compareTitles(first, second) ||
+          compareNewestCreated(first, second)
+        );
+      case "recently-added":
+      default:
+        return compareNewestCreated(first, second) || compareTitles(first, second);
+    }
+  });
+}
+
 function mapTheaterItemDoc(id: string, data: Record<string, unknown>): TheaterItem {
   const addedByUid = typeof data.addedByUid === "string" ? data.addedByUid : "";
 
@@ -505,17 +693,30 @@ function mapRatings(value: unknown): Record<string, TheaterRating> {
   }
 
   return Object.fromEntries(
-    Object.entries(value as Record<string, Record<string, unknown>>).map(([uid, rating]) => [
-      uid,
-      {
-        stars: typeof rating.stars === "number" ? rating.stars : 0,
-        updatedAt: stringifyTimestamp(rating.updatedAt),
-        userName:
-          typeof rating.userName === "string" && rating.userName
-            ? rating.userName
-            : getUserDisplayName(uid)
-      }
-    ])
+    Object.entries(value as Record<string, unknown>).map(([uid, rating]) => {
+      const ratingData =
+        rating && typeof rating === "object"
+          ? (rating as Record<string, unknown>)
+          : {};
+      const stars =
+        typeof rating === "number"
+          ? rating
+          : typeof ratingData.stars === "number"
+            ? ratingData.stars
+            : 0;
+
+      return [
+        uid,
+        {
+          stars,
+          updatedAt: stringifyTimestamp(ratingData.updatedAt),
+          userName:
+            typeof ratingData.userName === "string" && ratingData.userName
+              ? ratingData.userName
+              : getUserDisplayName(uid)
+        }
+      ];
+    })
   );
 }
 
@@ -544,17 +745,41 @@ function getMillis(value: unknown): number | null {
 }
 
 function stringifyTimestamp(value: unknown): string {
-  if (!value) {
-    return "";
+  const milliseconds = getTheaterTimestamp(value);
+  return milliseconds === null ? "" : new Date(milliseconds).toISOString();
+}
+
+function compareTitles(first: TheaterItem, second: TheaterItem): number {
+  return (
+    first.title.localeCompare(second.title, "en", { sensitivity: "base" }) ||
+    first.id.localeCompare(second.id)
+  );
+}
+
+function compareNewestCreated(first: TheaterItem, second: TheaterItem): number {
+  return compareNullableNumbers(
+    getTheaterTimestamp(first.createdAt),
+    getTheaterTimestamp(second.createdAt),
+    "desc"
+  );
+}
+
+function compareNullableNumbers(
+  first: number | null,
+  second: number | null,
+  direction: "asc" | "desc"
+): number {
+  if (first === null && second === null) {
+    return 0;
   }
 
-  if (typeof value === "string") {
-    return value;
+  if (first === null) {
+    return 1;
   }
 
-  if (value && typeof (value as Timestamp).toDate === "function") {
-    return (value as Timestamp).toDate().toISOString();
+  if (second === null) {
+    return -1;
   }
 
-  return "";
+  return direction === "asc" ? first - second : second - first;
 }

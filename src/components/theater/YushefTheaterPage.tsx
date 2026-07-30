@@ -15,11 +15,14 @@ import {
   deleteTheaterItem,
   getActivePresence,
   getMissingTheaterNames,
+  getTheaterAverageRating,
+  isTheaterSort,
   leaveTheater,
   markTheaterPresent,
   resetTheaterCountdown,
   setTheaterRating,
   setTheaterReady,
+  sortTheaterItems,
   startTheaterCountdown,
   subscribeToTheaterComments,
   subscribeToTheaterItems,
@@ -34,16 +37,29 @@ import {
   type TheaterItemType,
   type TheaterReadiness,
   type TheaterSession,
+  type TheaterSort,
   type TheaterStatus
 } from "@/lib/theater";
 
 const PRESENCE_THRESHOLD_MS = 30000;
 const PRESENCE_PING_MS = 10000;
+const THEATER_SORT_STORAGE_KEY = "yushef-theater-sort";
 const filters: Array<{ id: TheaterFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "want_to_watch", label: "Want" },
   { id: "watching", label: "Watching" },
   { id: "watched", label: "Watched" }
+];
+const sortOptions: Array<{ id: TheaterSort; label: string }> = [
+  { id: "recently-added", label: "Recently Added" },
+  { id: "oldest-added", label: "Oldest Added" },
+  { id: "title-asc", label: "Title: A–Z" },
+  { id: "title-desc", label: "Title: Z–A" },
+  { id: "highest-rated", label: "Highest Rated" },
+  { id: "lowest-rated", label: "Lowest Rated" },
+  { id: "recently-updated", label: "Recently Updated" },
+  { id: "status", label: "Status" },
+  { id: "type", label: "Type" }
 ];
 
 const emptySession: TheaterSession = {
@@ -67,6 +83,7 @@ export function YushefTheaterPage() {
   const [items, setItems] = useState<TheaterItem[]>([]);
   const [session, setSession] = useState<TheaterSession>(emptySession);
   const [activeFilter, setActiveFilter] = useState<TheaterFilter>("all");
+  const [activeSort, setActiveSort] = useState<TheaterSort>("recently-added");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Opening the theater...");
@@ -170,6 +187,18 @@ export function YushefTheaterPage() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    try {
+      const savedSort = window.localStorage.getItem(THEATER_SORT_STORAGE_KEY);
+
+      if (isTheaterSort(savedSort)) {
+        setActiveSort(savedSort);
+      }
+    } catch {
+      // Sorting still works in memory when browser storage is unavailable.
+    }
+  }, []);
+
   const activePresence = useMemo(
     () => getActivePresence(session, PRESENCE_THRESHOLD_MS, now),
     [now, session]
@@ -183,7 +212,21 @@ export function YushefTheaterPage() {
         : items.filter((item) => item.status === activeFilter),
     [activeFilter, items]
   );
+  const visibleItems = useMemo(
+    () => sortTheaterItems(filteredItems, activeSort),
+    [activeSort, filteredItems]
+  );
   const countdown = getCountdownDisplay(session, now);
+
+  function handleSortChange(nextSort: TheaterSort) {
+    setActiveSort(nextSort);
+
+    try {
+      window.localStorage.setItem(THEATER_SORT_STORAGE_KEY, nextSort);
+    } catch {
+      // Keep the selected order for this page visit when storage is unavailable.
+    }
+  }
 
   async function handleAddItem(input: TheaterItemInput) {
     if (!currentUser) {
@@ -387,21 +430,46 @@ export function YushefTheaterPage() {
             Add title
           </button>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {filters.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              onClick={() => setActiveFilter(filter.id)}
-              className={`shrink-0 rounded-full px-4 py-3 text-sm font-semibold ring-1 ${
-                activeFilter === filter.id
-                  ? "bg-rose-950 text-rose-50 ring-rose-950"
-                  : "bg-white/80 text-rose-700 ring-rose-100"
-              }`}
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1 overflow-x-auto py-1">
+            <div className="flex gap-2">
+              {filters.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.id)}
+                  className={`shrink-0 rounded-full px-4 py-3 text-sm font-semibold ring-1 ${
+                    activeFilter === filter.id
+                      ? "bg-rose-950 text-rose-50 ring-rose-950"
+                      : "bg-white/80 text-rose-700 ring-rose-100"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="relative shrink-0">
+            <span className="sr-only">Sort watchlist</span>
+            <SortIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-rose-500" />
+            <select
+              aria-label="Sort watchlist"
+              className="h-11 w-[9.6rem] appearance-none rounded-full border-0 bg-white/85 py-2 pl-9 pr-7 text-xs font-semibold text-rose-700 outline-none ring-1 ring-rose-100 transition focus:ring-2 focus:ring-rose-300"
+              value={activeSort}
+              onChange={(event) => {
+                if (isTheaterSort(event.target.value)) {
+                  handleSortChange(event.target.value);
+                }
+              }}
             >
-              {filter.label}
-            </button>
-          ))}
+              {sortOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDownIcon className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-rose-400" />
+          </label>
         </div>
         {syncStatus ? (
           <p className="mt-1 text-sm font-medium text-rose-500">{syncStatus}</p>
@@ -409,8 +477,8 @@ export function YushefTheaterPage() {
       </section>
 
       <section className="mt-4 space-y-4">
-        {filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
+        {visibleItems.length > 0 ? (
+          visibleItems.map((item) => (
             <TheaterItemCard
               key={item.id}
               currentUserId={currentUser.uid}
@@ -765,7 +833,7 @@ function TheaterItemCard({
   onRate: (item: TheaterItem, stars: number) => void;
   onStatusChange: (item: TheaterItem, status: TheaterStatus) => void;
 }) {
-  const averageRating = getAverageRating(item);
+  const averageRating = getTheaterAverageRating(item);
 
   return (
     <article className="relative overflow-hidden rounded-[1.75rem] bg-[#fffdf8] px-4 pb-4 pt-5 shadow-[0_14px_34px_rgba(176,92,112,0.13)] ring-1 ring-rose-100/90">
@@ -1063,18 +1131,6 @@ function getCountdownDisplay(session: TheaterSession, now: number): string {
   return String(Math.max(1, remaining));
 }
 
-function getAverageRating(item: TheaterItem): number | null {
-  const ratings = Object.values(item.ratings)
-    .map((rating) => rating.stars)
-    .filter((stars) => stars > 0);
-
-  if (ratings.length === 0) {
-    return null;
-  }
-
-  return ratings.reduce((total, stars) => total + stars, 0) / ratings.length;
-}
-
 function formatType(type: TheaterItemType): string {
   return type
     .split("_")
@@ -1118,4 +1174,41 @@ function getFriendlyError(error: unknown): string {
   }
 
   return message || "Something went wrong inside Yushef Theater.";
+}
+
+function SortIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="m7 15 3 3 3-3" />
+      <path d="M10 6v12" />
+      <path d="m17 9-3-3-3 3" />
+      <path d="M14 18V6" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
 }

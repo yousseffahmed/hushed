@@ -14,12 +14,104 @@ service firebase.storage {
         ];
     }
 
+    function special19thScope(coupleId, eventId) {
+      return coupleId == "yushef" && eventId == "2026-08-19";
+    }
+
+    function special19thEventPath(coupleId, eventId) {
+      return /databases/(default)/documents/couples/$(coupleId)/special19ths/$(eventId);
+    }
+
+    function special19thPackagePath(coupleId, eventId, uid) {
+      return /databases/(default)/documents/couples/$(coupleId)/special19ths/$(eventId)/packages/$(uid);
+    }
+
+    function special19thMomentPath(coupleId, eventId, uid) {
+      return /databases/(default)/documents/couples/$(coupleId)/special19ths/$(eventId)/momentPhotos/$(uid);
+    }
+
+    function special19thRevealed(coupleId, eventId) {
+      let eventPath = special19thEventPath(coupleId, eventId);
+      return firestore.exists(eventPath)
+        && firestore.get(eventPath).data.revealAt is timestamp
+        && request.time >= firestore.get(eventPath).data.revealAt;
+    }
+
+    function special19thPackageEditable(coupleId, eventId, uid) {
+      let packagePath = special19thPackagePath(coupleId, eventId, uid);
+      return firestore.exists(packagePath)
+        && firestore.get(packagePath).data.ownerUid == uid
+        && firestore.get(packagePath).data.sealed == false
+        && !special19thRevealed(coupleId, eventId);
+    }
+
+    function special19thMomentUnlocked(coupleId, eventId, uid) {
+      let ownPath = special19thMomentPath(coupleId, eventId, uid);
+      let partnerPath = uid == "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+        ? special19thMomentPath(coupleId, eventId, "orPQHip5ooOtfSSkyLYhl5hx9Kg1")
+        : special19thMomentPath(coupleId, eventId, "xLUPD71OGYfG4NByDz0buh8ZIsy2");
+      return !firestore.exists(ownPath) || !firestore.exists(partnerPath);
+    }
+
+    function validSpecial19thPackageMedia(mediaType) {
+      return request.resource != null
+        && (
+          (
+            mediaType == "photo"
+            && request.resource.size <= 10 * 1024 * 1024
+            && request.resource.contentType.matches("image/.*")
+          )
+          || (
+            mediaType == "voice"
+            && request.resource.size <= 25 * 1024 * 1024
+            && request.resource.contentType.matches("audio/.*")
+          )
+        );
+    }
+
     match /couples/{coupleId}/monthversaries/{memoryId}/{fileName} {
       allow read: if allowedUser();
       allow write: if allowedUser()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches("image/.*");
       allow delete: if allowedUser();
+    }
+
+    match /couples/{coupleId}/special19ths/{eventId}/packages/{userId}/{mediaType}/{fileName} {
+      allow read: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && (
+          request.auth.uid == userId
+          || special19thRevealed(coupleId, eventId)
+        );
+      allow create, update: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && request.auth.uid == userId
+        && special19thPackageEditable(coupleId, eventId, userId)
+        && validSpecial19thPackageMedia(mediaType);
+      allow delete: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && request.auth.uid == userId
+        && special19thPackageEditable(coupleId, eventId, userId);
+    }
+
+    match /couples/{coupleId}/special19ths/{eventId}/momentPhotos/{userId}/{fileName} {
+      allow read: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && special19thRevealed(coupleId, eventId);
+      allow create, update: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && request.auth.uid == userId
+        && special19thRevealed(coupleId, eventId)
+        && special19thMomentUnlocked(coupleId, eventId, userId)
+        && request.resource != null
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches("image/.*");
+      allow delete: if allowedUser()
+        && special19thScope(coupleId, eventId)
+        && request.auth.uid == userId
+        && special19thRevealed(coupleId, eventId)
+        && special19thMomentUnlocked(coupleId, eventId, userId);
     }
   }
 }

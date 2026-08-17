@@ -32,6 +32,7 @@ import { NextAnniversaryCard } from "./NextAnniversaryCard";
 import { TimeTogetherCard } from "./TimeTogetherCard";
 import { NudgeCard } from "@/components/nudges/NudgeCard";
 import { GamepadIcon } from "@/components/icons/GamepadIcon";
+import { Special19thHomeCard } from "@/components/special-19th/Special19thHomeCard";
 
 const MEMORY_CARD_COUNT = 1;
 
@@ -310,6 +311,8 @@ export function AnniversaryPage() {
           isToday={isAnniversaryToday}
         />
       </div>
+
+      {currentUser ? <Special19thHomeCard currentUser={currentUser} /> : null}
 
       {currentUser ? (
         <NudgeCard currentUser={currentUser} onError={setErrorMessage} />

@@ -14,6 +14,236 @@ service cloud.firestore {
         ];
     }
 
+    function special19thScope(coupleId, eventId) {
+      return coupleId == "yushef" && eventId == "2026-08-19";
+    }
+
+    function special19thEventPath(coupleId, eventId) {
+      return /databases/$(database)/documents/couples/$(coupleId)/special19ths/$(eventId);
+    }
+
+    function special19thExpectedName(uid) {
+      return uid == "xLUPD71OGYfG4NByDz0buh8ZIsy2" ? "Shosho" : "Yuyu";
+    }
+
+    function special19thEventExists(coupleId, eventId) {
+      return exists(special19thEventPath(coupleId, eventId));
+    }
+
+    function special19thRevealReached(coupleId, eventId) {
+      let eventPath = special19thEventPath(coupleId, eventId);
+      return exists(eventPath)
+        && get(eventPath).data.revealAt is timestamp
+        && request.time >= get(eventPath).data.revealAt;
+    }
+
+    function special19thRevealNotStarted(coupleId, eventId) {
+      let eventPath = special19thEventPath(coupleId, eventId);
+      return exists(eventPath) && get(eventPath).data.revealAt == null;
+    }
+
+    function validInitialSpecial19thStatus(status, uid) {
+      return status is map
+        && status.keys().hasAll(["ownerName", "sealed", "sealedAt"])
+        && status.keys().hasOnly(["ownerName", "sealed", "sealedAt"])
+        && status.ownerName == special19thExpectedName(uid)
+        && status.sealed == false
+        && status.sealedAt == null;
+    }
+
+    function validInitialSpecial19thEvent(data) {
+      let statusKeys = data.packageStatuses.keys();
+      return data.keys().hasAll([
+          "id",
+          "eventDate",
+          "title",
+          "packageStatuses",
+          "revealStartedAt",
+          "revealAt",
+          "revealStartedByUid",
+          "memoryCreated",
+          "memoryId",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "id",
+          "eventDate",
+          "title",
+          "packageStatuses",
+          "revealStartedAt",
+          "revealAt",
+          "revealStartedByUid",
+          "memoryCreated",
+          "memoryId",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.id == "2026-08-19"
+        && data.eventDate == "2026-08-19"
+        && data.title == "Our First 19th Apart"
+        && data.packageStatuses is map
+        && statusKeys.hasAll([
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        ])
+        && statusKeys.hasOnly([
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2",
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        ])
+        && validInitialSpecial19thStatus(
+          data.packageStatuses["xLUPD71OGYfG4NByDz0buh8ZIsy2"],
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+        )
+        && validInitialSpecial19thStatus(
+          data.packageStatuses["orPQHip5ooOtfSSkyLYhl5hx9Kg1"],
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        )
+        && data.revealStartedAt == null
+        && data.revealAt == null
+        && data.revealStartedByUid == null
+        && data.memoryCreated == false
+        && data.memoryId == null
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function validSpecial19thPackagePath(path, coupleId, eventId, uid, mediaType) {
+      return path == null
+        || (
+          path is string
+          && path.matches(
+            "^couples/" + coupleId + "/special19ths/" + eventId
+              + "/packages/" + uid + "/" + mediaType + "/[^/]+$"
+          )
+        );
+    }
+
+    function validSpecial19thDraft(data, coupleId, eventId, uid) {
+      return data.keys().hasAll([
+          "ownerUid",
+          "ownerName",
+          "letter",
+          "wish",
+          "loveThisMonth",
+          "photoStoragePath",
+          "photoFileName",
+          "voiceNoteStoragePath",
+          "voiceNoteFileName",
+          "voiceNoteContentType",
+          "sealed",
+          "sealedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "ownerUid",
+          "ownerName",
+          "letter",
+          "wish",
+          "loveThisMonth",
+          "photoStoragePath",
+          "photoFileName",
+          "voiceNoteStoragePath",
+          "voiceNoteFileName",
+          "voiceNoteContentType",
+          "sealed",
+          "sealedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.ownerUid == uid
+        && data.ownerName == special19thExpectedName(uid)
+        && data.letter is string
+        && data.letter.size() <= 10000
+        && data.wish is string
+        && data.wish.size() <= 2000
+        && data.loveThisMonth is string
+        && data.loveThisMonth.size() <= 2000
+        && validSpecial19thPackagePath(
+          data.photoStoragePath,
+          coupleId,
+          eventId,
+          uid,
+          "photo"
+        )
+        && (data.photoFileName == null || (data.photoFileName is string && data.photoFileName.size() <= 255))
+        && validSpecial19thPackagePath(
+          data.voiceNoteStoragePath,
+          coupleId,
+          eventId,
+          uid,
+          "voice"
+        )
+        && (data.voiceNoteFileName == null || (data.voiceNoteFileName is string && data.voiceNoteFileName.size() <= 255))
+        && (data.voiceNoteContentType == null || (data.voiceNoteContentType is string && data.voiceNoteContentType.size() <= 100))
+        && data.sealed == false
+        && data.sealedAt == null
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function validSpecial19thPresence(data, uid) {
+      return data.keys().hasAll(["uid", "name", "online", "lastSeenAt"])
+        && data.keys().hasOnly(["uid", "name", "online", "lastSeenAt"])
+        && data.uid == uid
+        && data.name == special19thExpectedName(uid)
+        && data.online is bool
+        && data.lastSeenAt == request.time;
+    }
+
+    function otherSpecial19thMomentMissing(coupleId, eventId, uid) {
+      return (
+          uid == "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+          && !exists(
+            /databases/$(database)/documents/couples/$(coupleId)/special19ths/$(eventId)/momentPhotos/orPQHip5ooOtfSSkyLYhl5hx9Kg1
+          )
+        )
+        || (
+          uid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+          && !exists(
+            /databases/$(database)/documents/couples/$(coupleId)/special19ths/$(eventId)/momentPhotos/xLUPD71OGYfG4NByDz0buh8ZIsy2
+          )
+        );
+    }
+
+    function validSpecial19thMoment(data, coupleId, eventId, uid) {
+      return data.keys().hasAll([
+          "uid",
+          "name",
+          "storagePath",
+          "url",
+          "fileName",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "uid",
+          "name",
+          "storagePath",
+          "url",
+          "fileName",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && data.uid == uid
+        && data.name == special19thExpectedName(uid)
+        && data.storagePath is string
+        && data.storagePath.matches(
+          "^couples/" + coupleId + "/special19ths/" + eventId
+            + "/momentPhotos/" + uid + "/[^/]+$"
+        )
+        && data.url is string
+        && data.url.size() > 0
+        && data.url.size() <= 4000
+        && data.url.matches("^https://firebasestorage[.]googleapis[.]com/.*")
+        && data.fileName is string
+        && data.fileName.size() > 0
+        && data.fileName.size() <= 255
+        && data.submittedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
     function validOwnTheaterReadiness(data) {
       let readyUsers = data.get("readyUsers", {});
       let ownReadiness = readyUsers.get(request.auth.uid, {});
@@ -161,6 +391,90 @@ service cloud.firestore {
             && request.resource.data.roundsPlayed == 0
             && request.resource.data.totalGuesses == 0
             && request.resource.data.bestWinAttempts == null;
+          allow delete: if false;
+        }
+      }
+
+      match /special19ths/{eventId} {
+        allow read: if allowedUser() && special19thScope(coupleId, eventId);
+        allow create: if allowedUser()
+          && special19thScope(coupleId, eventId)
+          && validInitialSpecial19thEvent(request.resource.data);
+        allow update, delete: if false;
+
+        match /packages/{userId} {
+          allow read: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && (
+              request.auth.uid == userId
+              || special19thRevealReached(coupleId, eventId)
+            );
+          allow create: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && request.auth.uid == userId
+            && special19thEventExists(coupleId, eventId)
+            && special19thRevealNotStarted(coupleId, eventId)
+            && validSpecial19thDraft(
+              request.resource.data,
+              coupleId,
+              eventId,
+              userId
+            )
+            && request.resource.data.createdAt == request.time;
+          allow update: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && request.auth.uid == userId
+            && resource.data.ownerUid == userId
+            && resource.data.sealed == false
+            && special19thRevealNotStarted(coupleId, eventId)
+            && validSpecial19thDraft(
+              request.resource.data,
+              coupleId,
+              eventId,
+              userId
+            )
+            && request.resource.data.createdAt == resource.data.createdAt;
+          allow delete: if false;
+        }
+
+        match /presence/{userId} {
+          allow read: if allowedUser() && special19thScope(coupleId, eventId);
+          allow create, update: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && special19thEventExists(coupleId, eventId)
+            && request.auth.uid == userId
+            && validSpecial19thPresence(request.resource.data, userId);
+          allow delete: if false;
+        }
+
+        match /momentPhotos/{userId} {
+          allow read: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && special19thRevealReached(coupleId, eventId);
+          allow create: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && request.auth.uid == userId
+            && special19thRevealReached(coupleId, eventId)
+            && validSpecial19thMoment(
+              request.resource.data,
+              coupleId,
+              eventId,
+              userId
+            )
+            && request.resource.data.submittedAt == request.time;
+          allow update: if allowedUser()
+            && special19thScope(coupleId, eventId)
+            && request.auth.uid == userId
+            && resource.data.uid == userId
+            && special19thRevealReached(coupleId, eventId)
+            && otherSpecial19thMomentMissing(coupleId, eventId, userId)
+            && validSpecial19thMoment(
+              request.resource.data,
+              coupleId,
+              eventId,
+              userId
+            )
+            && request.resource.data.submittedAt == resource.data.submittedAt;
           allow delete: if false;
         }
       }

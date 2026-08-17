@@ -1,6 +1,10 @@
 const admin = require("firebase-admin");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+  onDocumentWritten
+} = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { getUserDisplayName } = require("./coupleUsers");
@@ -12,6 +16,12 @@ const allowedUserIds = [
   "xLUPD71OGYfG4NByDz0buh8ZIsy2",
   "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
 ];
+const SPECIAL_19TH_EVENT_ID = "2026-08-19";
+const SPECIAL_19TH_COUPLE_ID = "yushef";
+const SPECIAL_19TH_EVENT_START_MS = Date.parse("2026-08-19T00:00:00+03:00");
+const SPECIAL_19TH_PRESENCE_THRESHOLD_MS = 60 * 1000;
+const SPECIAL_19TH_REVEAL_SECONDS = 3;
+const SPECIAL_19TH_MEMORY_ID = `special-19th-${SPECIAL_19TH_EVENT_ID}`;
 
 exports.sendNudgeNotification = onDocumentCreated(
   "couples/{coupleId}/nudges/{nudgeId}",
@@ -356,6 +366,471 @@ exports.sendTheaterReadyNotification = onDocumentUpdated(
   }
 );
 
+exports.sealSpecial19thPackage = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const { coupleId, eventId } = request.data || {};
+
+  assertSpecial19thCaller(uid, coupleId, eventId);
+
+  const db = admin.firestore();
+  const eventRef = getSpecial19thEventRef(db, coupleId, eventId);
+  const packageRef = eventRef.collection("packages").doc(uid);
+  const partnerUid = getPartnerUid(uid);
+  const partnerPackageRef = eventRef.collection("packages").doc(partnerUid);
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const eventSnapshot = await transaction.get(eventRef);
+      const packageSnapshot = await transaction.get(packageRef);
+      const partnerPackageSnapshot = await transaction.get(partnerPackageRef);
+
+      if (!eventSnapshot.exists) {
+        throw new HttpsError("not-found", "The special 19th event has not been prepared yet.");
+      }
+
+      if (!packageSnapshot.exists) {
+        throw new HttpsError("failed-precondition", "Save your package before sealing it.");
+      }
+
+      const eventData = eventSnapshot.data() || {};
+      const packageData = packageSnapshot.data() || {};
+      const partnerPackage = partnerPackageSnapshot.data() || {};
+
+      if (packageData.ownerUid !== uid) {
+        throw new HttpsError("permission-denied", "This package does not belong to you.");
+      }
+
+      if (packageData.sealed === true) {
+        return {
+          sealed: true,
+          bothSealed: partnerPackage.sealed === true
+        };
+      }
+
+      if (eventData.revealAt) {
+        throw new HttpsError("failed-precondition", "The reveal has already started.");
+      }
+
+      validateCompleteSpecial19thPackage(packageData, coupleId, eventId, uid);
+
+      const now = admin.firestore.Timestamp.now();
+      const packageStatus = {
+        ownerName: getUserDisplayName(uid),
+        sealed: true,
+        sealedAt: now
+      };
+
+      transaction.update(packageRef, {
+        sealed: true,
+        sealedAt: now,
+        updatedAt: now
+      });
+      transaction.update(eventRef, {
+        [`packageStatuses.${uid}`]: packageStatus,
+        updatedAt: now
+      });
+
+      return {
+        sealed: true,
+        bothSealed: partnerPackage.sealed === true
+      };
+    });
+
+    logger.info("Special 19th package sealed.", {
+      coupleId,
+      eventId,
+      uid,
+      bothSealed: result.bothSealed
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    logger.error("Failed to seal Special 19th package.", {
+      coupleId,
+      eventId,
+      uid,
+      error
+    });
+    throw new HttpsError("internal", "Your package couldn't be sealed yet.");
+  }
+});
+
+exports.startSpecial19thReveal = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const { coupleId, eventId } = request.data || {};
+
+  assertSpecial19thCaller(uid, coupleId, eventId);
+
+  const db = admin.firestore();
+  const eventRef = getSpecial19thEventRef(db, coupleId, eventId);
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const eventSnapshot = await transaction.get(eventRef);
+
+      if (!eventSnapshot.exists) {
+        throw new HttpsError("not-found", "The special 19th event was not found.");
+      }
+
+      const eventData = eventSnapshot.data() || {};
+
+      if (isFirestoreTimestamp(eventData.revealAt)) {
+        return {
+          revealAtMs: eventData.revealAt.toMillis(),
+          alreadyStarted: true
+        };
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      const nowMs = now.toMillis();
+
+      if (nowMs < SPECIAL_19TH_EVENT_START_MS) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The special 19th cannot be opened before 19 August in Cairo."
+        );
+      }
+
+      const packageRefs = allowedUserIds.map((userId) =>
+        eventRef.collection("packages").doc(userId)
+      );
+      const presenceRefs = allowedUserIds.map((userId) =>
+        eventRef.collection("presence").doc(userId)
+      );
+      const packageSnapshots = [];
+      const presenceSnapshots = [];
+
+      for (const packageRef of packageRefs) {
+        packageSnapshots.push(await transaction.get(packageRef));
+      }
+
+      for (const presenceRef of presenceRefs) {
+        presenceSnapshots.push(await transaction.get(presenceRef));
+      }
+
+      const allPackagesSealed = packageSnapshots.every(
+        (snapshot) => snapshot.exists && snapshot.data()?.sealed === true
+      );
+
+      if (!allPackagesSealed) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Both 19th packages must be sealed before opening."
+        );
+      }
+
+      const bothPresent = presenceSnapshots.every((snapshot) => {
+        const data = snapshot.data() || {};
+        const lastSeenAtMs = isFirestoreTimestamp(data.lastSeenAt)
+          ? data.lastSeenAt.toMillis()
+          : 0;
+
+        return (
+          snapshot.exists &&
+          data.online === true &&
+          lastSeenAtMs > 0 &&
+          nowMs - lastSeenAtMs <= SPECIAL_19TH_PRESENCE_THRESHOLD_MS &&
+          lastSeenAtMs - nowMs < 10_000
+        );
+      });
+
+      if (!bothPresent) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Both people must be present. It looks like someone stepped away."
+        );
+      }
+
+      const revealAt = admin.firestore.Timestamp.fromMillis(
+        nowMs + SPECIAL_19TH_REVEAL_SECONDS * 1000
+      );
+
+      transaction.update(eventRef, {
+        revealStartedAt: now,
+        revealAt,
+        revealStartedByUid: uid,
+        updatedAt: now
+      });
+
+      return {
+        revealAtMs: revealAt.toMillis(),
+        alreadyStarted: false
+      };
+    });
+
+    logger.info("Special 19th synchronized reveal started.", {
+      coupleId,
+      eventId,
+      uid,
+      revealAtMs: result.revealAtMs,
+      alreadyStarted: result.alreadyStarted
+    });
+
+    return result;
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    logger.error("Failed to start Special 19th reveal.", {
+      coupleId,
+      eventId,
+      uid,
+      error
+    });
+    throw new HttpsError("internal", "Our shared reveal couldn't start yet.");
+  }
+});
+
+exports.sendSpecial19thPackageNotification = onDocumentUpdated(
+  "couples/{coupleId}/special19ths/{eventId}/packages/{ownerUid}",
+  async (event) => {
+    const { coupleId, eventId, ownerUid } = event.params;
+
+    if (
+      coupleId !== SPECIAL_19TH_COUPLE_ID ||
+      eventId !== SPECIAL_19TH_EVENT_ID ||
+      !allowedUserIds.includes(ownerUid) ||
+      !event.data
+    ) {
+      return;
+    }
+
+    const beforeSealed = event.data.before.data()?.sealed === true;
+    const afterSealed = event.data.after.data()?.sealed === true;
+
+    if (beforeSealed || !afterSealed) {
+      return;
+    }
+
+    const recipientUid = getPartnerUid(ownerUid);
+    const ownerName = getUserDisplayName(ownerUid);
+    const db = admin.firestore();
+    const eventRef = getSpecial19thEventRef(db, coupleId, eventId);
+    const deliveryRef = db
+      .collection("couples")
+      .doc(coupleId)
+      .collection("notificationDeliveries")
+      .doc(`special19th-${eventId}-sealed-${ownerUid}`);
+
+    try {
+      try {
+        await deliveryRef.create({
+          type: "special_19th_package_sealed",
+          eventId,
+          ownerUid,
+          recipientUid,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (error) {
+        if (isAlreadyExistsError(error)) {
+          logger.info("Duplicate Special 19th package notification skipped.", {
+            coupleId,
+            eventId,
+            ownerUid,
+            recipientUid
+          });
+          return;
+        }
+
+        throw error;
+      }
+
+      const eventSnapshot = await eventRef.get();
+      const statuses = eventSnapshot.data()?.packageStatuses || {};
+      const bothReady = allowedUserIds.every((userId) => statuses[userId]?.sealed === true);
+      const title = bothReady
+        ? "Our 19th is ready 💗"
+        : `${ownerName} sealed something for you 💌`;
+      const body = bothReady
+        ? "Both surprises are sealed and waiting for us."
+        : "No peeking until our 19th 👀💗";
+      const delivery = await sendSpecial19thNotification({
+        coupleId,
+        recipientUid,
+        title,
+        body,
+        data: {
+          type: "special_19th",
+          subtype: bothReady ? "both_ready" : "package_sealed",
+          coupleId,
+          eventId,
+          fromUid: ownerUid,
+          fromName: ownerName,
+          message: body,
+          url: "/special-19th"
+        }
+      });
+
+      await deliveryRef.update({
+        status: delivery.successCount > 0 ? "sent" : delivery.tokenCount > 0 ? "failed" : "no_tokens",
+        successCount: delivery.successCount,
+        failureCount: delivery.failureCount,
+        invalidTokenCount: delivery.invalidTokenCount,
+        completedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      logger.info("Special 19th package notification processed.", {
+        coupleId,
+        eventId,
+        ownerUid,
+        recipientUid,
+        bothReady,
+        ...delivery
+      });
+    } catch (error) {
+      logger.error("Failed to process Special 19th package notification.", {
+        coupleId,
+        eventId,
+        ownerUid,
+        recipientUid,
+        error
+      });
+    }
+  }
+);
+
+exports.finalizeSpecial19thMemory = onDocumentWritten(
+  {
+    document: "couples/{coupleId}/special19ths/{eventId}/momentPhotos/{uid}",
+    retry: true
+  },
+  async (event) => {
+    const { coupleId, eventId, uid } = event.params;
+
+    if (
+      coupleId !== SPECIAL_19TH_COUPLE_ID ||
+      eventId !== SPECIAL_19TH_EVENT_ID ||
+      !allowedUserIds.includes(uid) ||
+      !event.data?.after.exists
+    ) {
+      return;
+    }
+
+    const db = admin.firestore();
+    const eventRef = getSpecial19thEventRef(db, coupleId, eventId);
+    const memoryRef = db
+      .collection("couples")
+      .doc(coupleId)
+      .collection("monthversaries")
+      .doc(SPECIAL_19TH_MEMORY_ID);
+
+    try {
+      const result = await db.runTransaction(async (transaction) => {
+        const eventSnapshot = await transaction.get(eventRef);
+        const momentRefs = allowedUserIds.map((userId) =>
+          eventRef.collection("momentPhotos").doc(userId)
+        );
+        const momentSnapshots = [];
+
+        for (const momentRef of momentRefs) {
+          momentSnapshots.push(await transaction.get(momentRef));
+        }
+
+        const memorySnapshot = await transaction.get(memoryRef);
+
+        if (!eventSnapshot.exists) {
+          return { created: false, reason: "event_missing" };
+        }
+
+        const eventData = eventSnapshot.data() || {};
+
+        if (eventData.memoryCreated === true) {
+          return { created: false, reason: "already_created" };
+        }
+
+        if (
+          !isFirestoreTimestamp(eventData.revealAt) ||
+          eventData.revealAt.toMillis() > Date.now()
+        ) {
+          return { created: false, reason: "not_revealed" };
+        }
+
+        if (momentSnapshots.some((snapshot) => !snapshot.exists)) {
+          return { created: false, reason: "waiting_for_both_photos" };
+        }
+
+        const momentDataByUid = Object.fromEntries(
+          momentSnapshots.map((snapshot, index) => [
+            allowedUserIds[index],
+            snapshot.data() || {}
+          ])
+        );
+
+        for (const userId of allowedUserIds) {
+          validateSpecial19thMoment(momentDataByUid[userId], coupleId, eventId, userId);
+        }
+
+        const now = admin.firestore.Timestamp.now();
+        const photoOrder = [
+          "orPQHip5ooOtfSSkyLYhl5hx9Kg1",
+          "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+        ];
+        const photos = photoOrder.map((userId) => {
+          const moment = momentDataByUid[userId];
+          const uploadedAt = isFirestoreTimestamp(moment.submittedAt)
+            ? moment.submittedAt.toDate().toISOString()
+            : now.toDate().toISOString();
+
+          return {
+            id: `special19-${userId}`,
+            url: moment.url,
+            storagePath: moment.storagePath,
+            fileName: moment.fileName,
+            uploadedBy: userId,
+            uploadedAt
+          };
+        });
+
+        if (!memorySnapshot.exists) {
+          transaction.set(memoryRef, {
+            id: SPECIAL_19TH_MEMORY_ID,
+            monthNumber: 17,
+            date: SPECIAL_19TH_EVENT_ID,
+            title: "Our First 19th Apart 💗",
+            description: "Same 19th. Different places. 💗",
+            photos,
+            createdBy: "special-19th-system",
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+
+        transaction.update(eventRef, {
+          memoryCreated: true,
+          memoryId: SPECIAL_19TH_MEMORY_ID,
+          updatedAt: now
+        });
+
+        return {
+          created: !memorySnapshot.exists,
+          reason: memorySnapshot.exists ? "existing_memory_linked" : "created"
+        };
+      });
+
+      logger.info("Special 19th permanent memory finalized.", {
+        coupleId,
+        eventId,
+        memoryId: SPECIAL_19TH_MEMORY_ID,
+        ...result
+      });
+    } catch (error) {
+      logger.error("Failed to finalize Special 19th permanent memory.", {
+        coupleId,
+        eventId,
+        uid,
+        memoryId: SPECIAL_19TH_MEMORY_ID,
+        error
+      });
+      throw error;
+    }
+  }
+);
+
 exports.submitNumberGuess = onCall(async (request) => {
   const functionStartMs = Date.now();
   const uid = request.auth && request.auth.uid;
@@ -575,4 +1050,163 @@ function calculateRightCount(secret, guess) {
   return secret.split("").reduce((total, digit, index) => {
     return total + (guess[index] === digit ? 1 : 0);
   }, 0);
+}
+
+function assertSpecial19thCaller(uid, coupleId, eventId) {
+  if (!uid || !allowedUserIds.includes(uid)) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only Yuyu and Shosho can use this special 19th."
+    );
+  }
+
+  if (coupleId !== SPECIAL_19TH_COUPLE_ID || eventId !== SPECIAL_19TH_EVENT_ID) {
+    throw new HttpsError("invalid-argument", "This special 19th event is not available.");
+  }
+}
+
+function getSpecial19thEventRef(db, coupleId, eventId) {
+  return db
+    .collection("couples")
+    .doc(coupleId)
+    .collection("special19ths")
+    .doc(eventId);
+}
+
+function getPartnerUid(uid) {
+  return allowedUserIds.find((candidate) => candidate !== uid);
+}
+
+function validateCompleteSpecial19thPackage(packageData, coupleId, eventId, uid) {
+  const requiredTextFields = ["letter", "wish", "loveThisMonth"];
+  const invalidText = requiredTextFields.some(
+    (field) =>
+      typeof packageData[field] !== "string" || packageData[field].trim().length === 0
+  );
+
+  if (invalidText) {
+    throw new HttpsError("failed-precondition", "Finish each written part before sealing.");
+  }
+
+  const mediaPrefix = `couples/${coupleId}/special19ths/${eventId}/packages/${uid}`;
+  const validPhotoPath =
+    typeof packageData.photoStoragePath === "string" &&
+    packageData.photoStoragePath.startsWith(`${mediaPrefix}/photo/`);
+  const validVoicePath =
+    typeof packageData.voiceNoteStoragePath === "string" &&
+    packageData.voiceNoteStoragePath.startsWith(`${mediaPrefix}/voice/`);
+
+  if (!validPhotoPath || !validVoicePath) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Add both your package photo and voice note before sealing."
+    );
+  }
+
+  if (
+    packageData.letter.length > 10_000 ||
+    packageData.wish.length > 2_000 ||
+    packageData.loveThisMonth.length > 2_000
+  ) {
+    throw new HttpsError("invalid-argument", "One of the package messages is too long.");
+  }
+}
+
+function validateSpecial19thMoment(moment, coupleId, eventId, uid) {
+  const expectedPrefix = `couples/${coupleId}/special19ths/${eventId}/momentPhotos/${uid}/`;
+  const valid =
+    moment.uid === uid &&
+    typeof moment.name === "string" &&
+    typeof moment.storagePath === "string" &&
+    moment.storagePath.startsWith(expectedPrefix) &&
+    typeof moment.url === "string" &&
+    moment.url.startsWith("https://firebasestorage.googleapis.com/") &&
+    typeof moment.fileName === "string" &&
+    moment.fileName.length > 0;
+
+  if (!valid) {
+    throw new Error(`Invalid Special 19th moment document for ${uid}.`);
+  }
+}
+
+async function sendSpecial19thNotification({
+  coupleId,
+  recipientUid,
+  title,
+  body,
+  data
+}) {
+  const tokensSnapshot = await admin
+    .firestore()
+    .collection("couples")
+    .doc(coupleId)
+    .collection("notificationTokens")
+    .doc(recipientUid)
+    .collection("tokens")
+    .get();
+  const tokenEntries = tokensSnapshot.docs
+    .map((tokenDoc) => ({
+      ref: tokenDoc.ref,
+      token: tokenDoc.data().token
+    }))
+    .filter((entry) => typeof entry.token === "string" && entry.token.trim().length > 0);
+  const tokens = tokenEntries.map((entry) => entry.token.trim());
+
+  if (tokens.length === 0) {
+    return {
+      tokenCount: 0,
+      successCount: 0,
+      failureCount: 0,
+      invalidTokenCount: 0
+    };
+  }
+
+  const response = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: String(title),
+      body: String(body)
+    },
+    data: Object.fromEntries(
+      Object.entries(data).map(([key, value]) => [key, String(value)])
+    )
+  });
+  const invalidTokenRefs = response.responses
+    .map((sendResponse, index) => {
+      if (sendResponse.success) {
+        return null;
+      }
+
+      const errorCode = sendResponse.error && sendResponse.error.code;
+      const invalid =
+        errorCode === "messaging/registration-token-not-registered" ||
+        errorCode === "messaging/invalid-registration-token" ||
+        errorCode === "messaging/invalid-argument";
+
+      return invalid ? tokenEntries[index].ref : null;
+    })
+    .filter(Boolean);
+
+  if (invalidTokenRefs.length > 0) {
+    await Promise.all(invalidTokenRefs.map((tokenRef) => tokenRef.delete()));
+  }
+
+  return {
+    tokenCount: tokens.length,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+    invalidTokenCount: invalidTokenRefs.length
+  };
+}
+
+function isFirestoreTimestamp(value) {
+  return value && typeof value.toMillis === "function";
+}
+
+function isAlreadyExistsError(error) {
+  return (
+    error?.code === 6 ||
+    error?.code === "already-exists" ||
+    error?.code === "firestore/already-exists"
+  );
 }

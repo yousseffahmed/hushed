@@ -130,12 +130,15 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
     listenForForegroundMessages((payload) => {
       const message = payload.notification?.body || payload.data?.message || "A little nudge arrived.";
       const isTheaterReady = payload.data?.type === "theater_ready";
+      const isSpecial19th = payload.data?.type === "special_19th";
       const senderName =
         (isTheaterReady ? payload.data?.readyName : payload.data?.fromName) ||
         getUserDisplayName(payload.data?.fromUid || payload.data?.fromUserId);
 
       setForegroundNudge(
-        isTheaterReady
+        isSpecial19th
+          ? `${payload.notification?.title || "Our 19th 💗"} — ${message}`
+          : isTheaterReady
           ? `${senderName} is ready 🍿 — ${message}`
           : `from ${senderName}: ${message}`
       );

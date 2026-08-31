@@ -1,11 +1,11 @@
+export const SHOSHO_USER_ID = "xLUPD71OGYfG4NByDz0buh8ZIsy2";
+export const YUYU_USER_ID = "orPQHip5ooOtfSSkyLYhl5hx9Kg1";
+
 export const coupleUsers = {
-  allowedUserIds: [
-    "xLUPD71OGYfG4NByDz0buh8ZIsy2",
-    "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
-  ],
+  allowedUserIds: [SHOSHO_USER_ID, YUYU_USER_ID],
   displayNames: {
-    xLUPD71OGYfG4NByDz0buh8ZIsy2: "Shosho",
-    orPQHip5ooOtfSSkyLYhl5hx9Kg1: "Yuyu"
+    [SHOSHO_USER_ID]: "Shosho",
+    [YUYU_USER_ID]: "Yuyu"
   }
 } as const;
 

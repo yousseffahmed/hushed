@@ -131,12 +131,15 @@ export function NudgeCard({ currentUser, onError }: NudgeCardProps) {
       const message = payload.notification?.body || payload.data?.message || "A little nudge arrived.";
       const isTheaterReady = payload.data?.type === "theater_ready";
       const isSpecial19th = payload.data?.type === "special_19th";
+      const isApologyLetter = payload.data?.type === "apology_letter";
       const senderName =
         (isTheaterReady ? payload.data?.readyName : payload.data?.fromName) ||
         getUserDisplayName(payload.data?.fromUid || payload.data?.fromUserId);
 
       setForegroundNudge(
-        isSpecial19th
+        isApologyLetter
+          ? `${payload.notification?.title || "Yuyu left you a letter 💌"} — ${message}`
+          : isSpecial19th
           ? `${payload.notification?.title || "Our 19th 💗"} — ${message}`
           : isTheaterReady
           ? `${senderName} is ready 🍿 — ${message}`

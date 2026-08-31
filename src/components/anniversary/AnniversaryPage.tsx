@@ -33,6 +33,7 @@ import { TimeTogetherCard } from "./TimeTogetherCard";
 import { NudgeCard } from "@/components/nudges/NudgeCard";
 import { GamepadIcon } from "@/components/icons/GamepadIcon";
 import { Special19thHomeCard } from "@/components/special-19th/Special19thHomeCard";
+import { ApologyHomeCard } from "@/components/apology/ApologyHomeCard";
 
 const MEMORY_CARD_COUNT = 1;
 
@@ -311,6 +312,8 @@ export function AnniversaryPage() {
           isToday={isAnniversaryToday}
         />
       </div>
+
+      {currentUser ? <ApologyHomeCard currentUser={currentUser} /> : null}
 
       {currentUser ? <Special19thHomeCard currentUser={currentUser} /> : null}
 

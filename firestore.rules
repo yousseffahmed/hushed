@@ -14,6 +14,82 @@ service cloud.firestore {
         ];
     }
 
+    function apologyLetterScope(coupleId, letterId) {
+      return coupleId == "yushef"
+        && letterId == "apology-shosho-2026-08-31";
+    }
+
+    function validApologyCommitment(commitment) {
+      return commitment is string && commitment.size() <= 500;
+    }
+
+    function validApologyCommitments(commitments) {
+      return commitments is list
+        && commitments.size() >= 1
+        && commitments.size() <= 6
+        && validApologyCommitment(commitments[0])
+        && (commitments.size() < 2 || validApologyCommitment(commitments[1]))
+        && (commitments.size() < 3 || validApologyCommitment(commitments[2]))
+        && (commitments.size() < 4 || validApologyCommitment(commitments[3]))
+        && (commitments.size() < 5 || validApologyCommitment(commitments[4]))
+        && (commitments.size() < 6 || validApologyCommitment(commitments[5]));
+    }
+
+    function validApologyDraft(data) {
+      return data.keys().hasAll([
+          "id",
+          "type",
+          "fromUid",
+          "fromName",
+          "toUid",
+          "toName",
+          "title",
+          "apology",
+          "shouldHaveDone",
+          "whatImChanging",
+          "commitments",
+          "status",
+          "publishedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "id",
+          "type",
+          "fromUid",
+          "fromName",
+          "toUid",
+          "toName",
+          "title",
+          "apology",
+          "shouldHaveDone",
+          "whatImChanging",
+          "commitments",
+          "status",
+          "publishedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.id == "apology-shosho-2026-08-31"
+        && data.type == "apology"
+        && data.fromUid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+        && data.fromName == "Yuyu"
+        && data.toUid == "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+        && data.toName == "Shosho"
+        && data.title == "For Shosho — I’m Sorry"
+        && data.apology is string
+        && data.apology.size() <= 12000
+        && data.shouldHaveDone is string
+        && data.shouldHaveDone.size() <= 8000
+        && data.whatImChanging is string
+        && data.whatImChanging.size() <= 8000
+        && validApologyCommitments(data.commitments)
+        && data.status == "draft"
+        && data.publishedAt == null
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
     function special19thScope(coupleId, eventId) {
       return coupleId == "yushef" && eventId == "2026-08-19";
     }
@@ -393,6 +469,40 @@ service cloud.firestore {
             && request.resource.data.bestWinAttempts == null;
           allow delete: if false;
         }
+      }
+
+      match /letters/{letterId} {
+        allow get: if allowedUser()
+          && apologyLetterScope(coupleId, letterId)
+          && (
+            request.auth.uid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+            || (
+              request.auth.uid == "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+              && resource.data.status == "published"
+              && resource.data.fromUid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+              && resource.data.toUid == "xLUPD71OGYfG4NByDz0buh8ZIsy2"
+            )
+          );
+        allow list: if false;
+        allow create: if allowedUser()
+          && apologyLetterScope(coupleId, letterId)
+          && request.auth.uid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+          && validApologyDraft(request.resource.data)
+          && request.resource.data.createdAt == request.time;
+        allow update: if allowedUser()
+          && apologyLetterScope(coupleId, letterId)
+          && request.auth.uid == "orPQHip5ooOtfSSkyLYhl5hx9Kg1"
+          && resource.data.status == "draft"
+          && validApologyDraft(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if false;
+      }
+
+      match /letterPublications/{letterId} {
+        allow get: if allowedUser()
+          && apologyLetterScope(coupleId, letterId)
+          && request.auth.uid == "xLUPD71OGYfG4NByDz0buh8ZIsy2";
+        allow list, create, update, delete: if false;
       }
 
       match /special19ths/{eventId} {

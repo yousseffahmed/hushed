@@ -22,6 +22,12 @@ const SPECIAL_19TH_EVENT_START_MS = Date.parse("2026-08-19T00:00:00+03:00");
 const SPECIAL_19TH_PRESENCE_THRESHOLD_MS = 60 * 1000;
 const SPECIAL_19TH_REVEAL_SECONDS = 3;
 const SPECIAL_19TH_MEMORY_ID = `special-19th-${SPECIAL_19TH_EVENT_ID}`;
+const APOLOGY_COUPLE_ID = "yushef";
+const APOLOGY_LETTER_ID = "apology-shosho-2026-08-31";
+const APOLOGY_SENDER_UID = "orPQHip5ooOtfSSkyLYhl5hx9Kg1";
+const APOLOGY_RECIPIENT_UID = "xLUPD71OGYfG4NByDz0buh8ZIsy2";
+const APOLOGY_TITLE = "For Shosho — I’m Sorry";
+const APOLOGY_DELIVERY_ID = `${APOLOGY_LETTER_ID}-published`;
 
 exports.sendNudgeNotification = onDocumentCreated(
   "couples/{coupleId}/nudges/{nudgeId}",
@@ -649,7 +655,7 @@ exports.sendSpecial19thPackageNotification = onDocumentUpdated(
       const body = bothReady
         ? "Both surprises are sealed and waiting for us."
         : "No peeking until our 19th 👀💗";
-      const delivery = await sendSpecial19thNotification({
+      const delivery = await sendNotificationToUser({
         coupleId,
         recipientUid,
         title,
@@ -830,6 +836,177 @@ exports.finalizeSpecial19thMemory = onDocumentWritten(
     }
   }
 );
+
+exports.publishApologyLetter = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const { coupleId, letterId } = request.data || {};
+
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Sign in before sealing this letter.");
+  }
+
+  if (uid !== APOLOGY_SENDER_UID) {
+    throw new HttpsError("permission-denied", "Only Yuyu can seal this letter.");
+  }
+
+  if (coupleId !== APOLOGY_COUPLE_ID || letterId !== APOLOGY_LETTER_ID) {
+    throw new HttpsError("invalid-argument", "This private letter is not available.");
+  }
+
+  const db = admin.firestore();
+  const coupleRef = db.collection("couples").doc(coupleId);
+  const letterRef = coupleRef.collection("letters").doc(letterId);
+  const publicationRef = coupleRef.collection("letterPublications").doc(letterId);
+  const deliveryRef = coupleRef
+    .collection("notificationDeliveries")
+    .doc(APOLOGY_DELIVERY_ID);
+
+  try {
+    const publication = await db.runTransaction(async (transaction) => {
+      const letterSnapshot = await transaction.get(letterRef);
+
+      if (!letterSnapshot.exists) {
+        throw new HttpsError("failed-precondition", "Save your letter before sealing it.");
+      }
+
+      const letter = letterSnapshot.data() || {};
+
+      if (letter.status === "published") {
+        throw new HttpsError("already-exists", "This letter is already sealed.");
+      }
+
+      if (
+        letter.id !== APOLOGY_LETTER_ID ||
+        letter.type !== "apology" ||
+        letter.fromUid !== APOLOGY_SENDER_UID ||
+        letter.toUid !== APOLOGY_RECIPIENT_UID ||
+        letter.fromName !== "Yuyu" ||
+        letter.toName !== "Shosho" ||
+        letter.title !== APOLOGY_TITLE
+      ) {
+        throw new HttpsError("permission-denied", "This letter’s identity is invalid.");
+      }
+
+      const content = normalizeApologyLetterContent(letter);
+      validateApologyLetterForPublication(content);
+      const publishedAt = admin.firestore.Timestamp.now();
+      const publicationData = {
+        id: APOLOGY_LETTER_ID,
+        letterId: APOLOGY_LETTER_ID,
+        type: "apology",
+        fromUid: APOLOGY_SENDER_UID,
+        fromName: "Yuyu",
+        toUid: APOLOGY_RECIPIENT_UID,
+        toName: "Shosho",
+        title: APOLOGY_TITLE,
+        publishedAt
+      };
+
+      transaction.update(letterRef, {
+        ...content,
+        status: "published",
+        publishedAt,
+        updatedAt: publishedAt
+      });
+      transaction.set(publicationRef, publicationData);
+      transaction.create(deliveryRef, {
+        type: "apology_letter_published",
+        letterId: APOLOGY_LETTER_ID,
+        fromUid: APOLOGY_SENDER_UID,
+        toUid: APOLOGY_RECIPIENT_UID,
+        status: "pending",
+        createdAt: publishedAt
+      });
+
+      return publicationData;
+    });
+
+    let notificationStatus = "failed";
+    let notificationSent = false;
+
+    try {
+      const title = "Yuyu left you a letter 💌";
+      const body = "Open it whenever you’re ready.";
+      const delivery = await sendNotificationToUser({
+        coupleId,
+        recipientUid: APOLOGY_RECIPIENT_UID,
+        title,
+        body,
+        data: {
+          type: "apology_letter",
+          coupleId,
+          letterId,
+          fromUid: APOLOGY_SENDER_UID,
+          fromName: "Yuyu",
+          toUid: APOLOGY_RECIPIENT_UID,
+          message: body,
+          url: "/for-shosho"
+        }
+      });
+
+      notificationSent = delivery.successCount > 0;
+      notificationStatus =
+        delivery.tokenCount === 0
+          ? "no_tokens"
+          : delivery.successCount === delivery.tokenCount
+            ? "sent"
+            : delivery.successCount > 0
+              ? "partial"
+              : "failed";
+
+      await deliveryRef.update({
+        status: notificationStatus,
+        successCount: delivery.successCount,
+        failureCount: delivery.failureCount,
+        invalidTokenCount: delivery.invalidTokenCount,
+        completedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      logger.info("Apology letter published and notification processed.", {
+        coupleId,
+        letterId,
+        fromUid: APOLOGY_SENDER_UID,
+        toUid: APOLOGY_RECIPIENT_UID,
+        notificationStatus,
+        successCount: delivery.successCount,
+        failureCount: delivery.failureCount,
+        invalidTokenCount: delivery.invalidTokenCount
+      });
+    } catch (notificationError) {
+      await deliveryRef
+        .update({
+          status: "failed",
+          completedAt: admin.firestore.FieldValue.serverTimestamp()
+        })
+        .catch(() => undefined);
+      logger.error("Apology letter was published, but its notification failed.", {
+        coupleId,
+        letterId,
+        fromUid: APOLOGY_SENDER_UID,
+        toUid: APOLOGY_RECIPIENT_UID,
+        error: notificationError
+      });
+    }
+
+    return {
+      published: Boolean(publication),
+      notificationSent,
+      notificationStatus
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    logger.error("Failed to publish apology letter.", {
+      coupleId,
+      letterId,
+      uid,
+      error
+    });
+    throw new HttpsError("internal", "Your letter couldn’t be sealed yet.");
+  }
+});
 
 exports.submitNumberGuess = onCall(async (request) => {
   const functionStartMs = Date.now();
@@ -1129,7 +1306,7 @@ function validateSpecial19thMoment(moment, coupleId, eventId, uid) {
   }
 }
 
-async function sendSpecial19thNotification({
+async function sendNotificationToUser({
   coupleId,
   recipientUid,
   title,
@@ -1197,6 +1374,57 @@ async function sendSpecial19thNotification({
     failureCount: response.failureCount,
     invalidTokenCount: invalidTokenRefs.length
   };
+}
+
+function normalizeApologyLetterContent(letter) {
+  return {
+    apology: typeof letter.apology === "string" ? letter.apology.trim() : "",
+    shouldHaveDone:
+      typeof letter.shouldHaveDone === "string" ? letter.shouldHaveDone.trim() : "",
+    whatImChanging:
+      typeof letter.whatImChanging === "string" ? letter.whatImChanging.trim() : "",
+    commitments: Array.isArray(letter.commitments)
+      ? letter.commitments.map((commitment) =>
+          typeof commitment === "string" ? commitment.trim() : ""
+        )
+      : []
+  };
+}
+
+function validateApologyLetterForPublication(content) {
+  const requiredSections = [
+    content.apology,
+    content.shouldHaveDone,
+    content.whatImChanging
+  ];
+
+  if (requiredSections.some((section) => section.length < 3)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Finish each written part before sealing the letter."
+    );
+  }
+
+  if (
+    content.apology.length > 12_000 ||
+    content.shouldHaveDone.length > 8_000 ||
+    content.whatImChanging.length > 8_000
+  ) {
+    throw new HttpsError("invalid-argument", "One of the letter sections is too long.");
+  }
+
+  if (
+    content.commitments.length < 1 ||
+    content.commitments.length > 6 ||
+    content.commitments.some(
+      (commitment) => commitment.length < 3 || commitment.length > 500
+    )
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Add between one and six clear commitments before sealing."
+    );
+  }
 }
 
 function isFirestoreTimestamp(value) {

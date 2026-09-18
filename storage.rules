@@ -69,6 +69,19 @@ service firebase.storage {
         );
     }
 
+    match /couples/{coupleId}/weddingTimeline/{momentId}/{fileName} {
+      allow read, delete: if allowedUser() && coupleId == 'yushef';
+      allow create: if allowedUser() && coupleId == 'yushef'
+        && resource == null
+        && momentId.matches('[a-zA-Z0-9]{20}')
+        && fileName.matches('[a-zA-Z0-9]{20}-[a-zA-Z0-9._-]{1,120}')
+        && firestore.exists(/databases/(default)/documents/couples/$(coupleId)/weddingTimeline/$(momentId))
+        && firestore.get(/databases/(default)/documents/couples/$(coupleId)/weddingTimeline/$(momentId)).data.deleting == false
+        && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif|avif)');
+      allow update: if false;
+    }
+
     match /couples/{coupleId}/monthversaries/{memoryId}/{fileName} {
       allow read: if allowedUser();
       allow write: if allowedUser()

@@ -5,15 +5,19 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:wedding": "node --test tests/weddingTimeline.test.cjs",
+    "test:wedding:rules": "firebase emulators:exec --config firebase.wedding-test.json --project demo-yushef --only firestore,storage \"node --test tests/weddingRules.test.cjs\""
   },
   "dependencies": {
     "firebase": "^12.12.1",
+    "lucide-react": "^1.47.0",
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

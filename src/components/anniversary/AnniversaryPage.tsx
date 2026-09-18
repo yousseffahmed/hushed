@@ -34,6 +34,8 @@ import { NudgeCard } from "@/components/nudges/NudgeCard";
 import { GamepadIcon } from "@/components/icons/GamepadIcon";
 import { Special19thHomeCard } from "@/components/special-19th/Special19thHomeCard";
 import { ApologyHomeCard } from "@/components/apology/ApologyHomeCard";
+import Link from "next/link";
+import { ArrowUpRight, HeartHandshake } from "lucide-react";
 
 const MEMORY_CARD_COUNT = 1;
 
@@ -312,6 +314,12 @@ export function AnniversaryPage() {
           isToday={isAnniversaryToday}
         />
       </div>
+
+      <Link href="/our-wedding" className="mt-5 flex items-center gap-3 rounded-2xl border border-rose-100 bg-white/80 px-4 py-3 text-rose-950 shadow-sm">
+        <HeartHandshake className="h-6 w-6 shrink-0 text-rose-400" aria-hidden="true" />
+        <span className="min-w-0 flex-1"><span className="block font-[var(--font-display)] text-lg">Our Road to Forever</span><span className="block text-xs text-stone-500">Every little step toward us.</span></span>
+        <ArrowUpRight size={18} aria-hidden="true" />
+      </Link>
 
       {currentUser ? <ApologyHomeCard currentUser={currentUser} /> : null}
 

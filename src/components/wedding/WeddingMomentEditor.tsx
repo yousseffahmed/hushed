@@ -57,7 +57,7 @@ export function WeddingMomentEditor({ moment, userId, onClose, onSaved }: {
   return <WeddingSheet title={moment ? "Keep this moment close" : "A new page in our story"} onClose={onClose} busy={busy}>
     <form className="wedding-form" onSubmit={save}>
       <fieldset disabled={busy}>
-        <label>What shall we call it?<input autoFocus required maxLength={120} value={value.title} onChange={(e) => set("title", e.target.value)} /></label>
+        <label>What shall we call it?<input required maxLength={120} value={value.title} onChange={(e) => set("title", e.target.value)} /></label>
         <div className="wedding-status-picker" aria-label="Moment status">
           {([['completed', 'It happened'], ['upcoming', 'Still to come']] as const).map(([status, label]) =>
             <button type="button" key={status} aria-pressed={value.status === status} onClick={() => set("status", status)}>{value.status === status && <Check size={16} />}{label}</button>)}

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test:wedding": "node --test tests/weddingTimeline.test.cjs",
+    "test:wedding:sheets": "playwright test --config tests/wedding-sheet/playwright.config.ts",
     "test:wedding:rules": "firebase emulators:exec --config firebase.wedding-test.json --project demo-yushef --only firestore,storage \"node --test tests/weddingRules.test.cjs\""
   },
   "dependencies": {
@@ -18,10 +19,12 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.0.0"
   }
